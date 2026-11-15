@@ -2,11 +2,13 @@
 
 import { VERSION } from '../core/config.js';
 
-const SETTINGS_KEY = 'quad…s.v2';
+const SETTINGS_KEY = 'quadcopter-sim.settings.v2';
+// v0.1-v0.2 shipped with a corrupted key (literal U+2026); migrated once on load
+const LEGACY_SETTINGS_KEY = 'quad\u2026s.v2';
 
 export function loadSettings() {
-  const base = { volume: 0.7, sound: true, sensitivity: 0.55, shadows: true, night: false, wind: 'breezy', drone: 'scout', mission: 'free' };
-  try { return Object.assign(base, JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); } catch { return base; }
+  const base = { volume: 0.7, sound: true, sensitivity: 0.55, shadows: true, night: false, wind: 'breezy', quality: 'auto', drone: 'scout', mission: 'free' };
+  try { return Object.assign(base, JSON.parse(localStorage.getItem(SETTINGS_KEY) || localStorage.getItem(LEGACY_SETTINGS_KEY)) || {}); } catch { return base; }
 }
 
 export function saveSettings(s) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch { /* ignore */ } }
@@ -84,8 +86,14 @@ export class Screens {
               <option value="breezy">Breezy</option>
               <option value="gusty">Gusty</option>
             </select></label>
+            <label class="set-row"><span>Graphics quality</span><select id="set-quality" class="set-select">
+              <option value="auto">Auto</option>
+              <option value="low">Low</option>
+              <option value="med">Medium</option>
+              <option value="high">High</option>
+            </select></label>
           </div>
-          <p class="set-note">Shadows OFF boosts FPS on weaker GPUs. Sensitivity blends linear ↔ expo response. Wind drives drift, gusts and the windsock.</p>
+          <p class="set-note">Shadows OFF boosts FPS on weaker GPUs. Sensitivity blends linear ↔ expo response. Wind drives drift, gusts and the windsock. Quality Auto picks Low / Med / High from your hardware &mdash; running: <span id="q-resolved" class="q-resolved">—</span>. Renderer anti-aliasing applies at startup only.</p>
         </section>
 
         <section class="controls-cheat">
@@ -101,7 +109,7 @@ export class Screens {
         <div class="launch-bar">
           <button class="btn-launch" id="launch-btn">LAUNCH MISSION<em id="launch-sub"></em></button>
         </div>
-        <div class="menu-foot">QUADSIM PRO &middot; v${VERSION} &middot; wind &amp; atmosphere</div>
+        <div class="menu-foot">QUADSIM PRO &middot; v${VERSION} &middot; wind · atmosphere · reflections</div>
       </div>
     </div>
 
@@ -172,6 +180,7 @@ export class Screens {
     bindCheck('#set-shadows', 'shadows');
     bindCheck('#set-night', 'night');
     bindSelect('#set-wind', 'wind');
+    bindSelect('#set-quality', 'quality');
   }
 
   _syncSettings() {
@@ -182,6 +191,7 @@ export class Screens {
     this._setChk('#set-shadows', s.shadows);
     this._setChk('#set-night', s.night);
     this._setSel('#set-wind', s.wind || 'breezy');
+    this._setSel('#set-quality', s.quality || 'auto');
   }
   _setVal(sel, v) { this.root.querySelectorAll(sel).forEach((r) => { r.value = v; }); }
   _setChk(sel, v) { this.root.querySelectorAll(sel).forEach((r) => { r.checked = v; }); }
@@ -225,6 +235,11 @@ export class Screens {
   setPad(on) {
     this.el.padHint.textContent = on ? 'GAMEPAD READY · Mode 2' : 'GAMEPAD: NOT DETECTED';
     this.el.padHint.classList.toggle('on', !!on);
+  }
+
+  setQualityResolved(name) {
+    const el = this.root.querySelector('#q-resolved');
+    if (el) el.textContent = name;
   }
 
   showMenu() { this._show(this.el.menu); this.renderMissions(); this.renderDrones(); this._syncSettings(); }

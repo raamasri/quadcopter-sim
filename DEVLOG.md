@@ -6,7 +6,7 @@ Autonomous staged development. Baseline: v0.1.0 (`cfc2ba1`) — full simulator r
 | Stage | Theme | Status |
 |---|---|---|
 | v0.2.0 | Wind system: WindField, air-relative physics, windsock/flags/dust, wind audio, HUD indicator, settings | done |
-| v0.3.0 | Visual fidelity: PMREM env reflections, shadow camera follow, fog, Low/Med/High quality presets | planned |
+| v0.3.0 | Visual fidelity: PMREM env reflections, shadow camera follow, fog, Low/Med/High quality presets | implemented, pending QA |
 | v0.4.0 | Touch controls: dual virtual sticks + arm/camera/pause buttons | planned |
 | v0.5.0 | HUD minimap + UI no-overlap polish pass | planned |
 | v0.6.0 | TT ghost replays (record best run, translucent ghost) | planned |
@@ -25,3 +25,5 @@ Autonomous staged development. Baseline: v0.1.0 (`cfc2ba1`) — full simulator r
 
 - 2026-11-15: v0.2.0 wind system implemented, audited PASS (0 crit/major; minors fixed: dead CFG freq keys, unused local). Runtime: 60 FPS, 0 console errors, wind 1.8 m/s breezy verified via __SIM.
 - 2026-11-15: v0.2.0 deployed -> https://quadcopter-sim.vercel.app (production alias, guest GET 200, protection not blocking). CLI linked to raama-srivatsans-projects/quadcopter-sim.
+
+- 2026-11-15: v0.3.0 visuals implemented+audited (FIXES_APPLIED: HIGH-severity corrupted SETTINGS_KEY U+2026 fixed with legacy migration; env debounce 600->1500ms; dust motes now soft round sprites). Leak test pass (130/101/31 stable over 10 night toggles), 60 FPS, pond reflections verified visually.

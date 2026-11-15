@@ -18,7 +18,8 @@ export class HUD {
       armBadge: g('arm-badge'), armBar: g('arm-bar'), padBadge: g('pad-badge'),
       rpmFill: g('rpm-fill'),
       windInd: g('wind-ind'), windArrow: g('wind-arrow'), windSpeed: g('wind-speed'),
-      windBars: root.querySelectorAll('#wind-bars i')
+      windBars: root.querySelectorAll('#wind-bars i'),
+      qualityChip: g('quality-chip')
     };
     this._toastTimer = 0;
     this._lastBig = '';
@@ -115,6 +116,7 @@ export class HUD {
 
   setView(name) { this.el.viewBadge.textContent = name; }
   setMission(name) { this.el.missionBadge.textContent = name; this.el.missionBadge.style.display = name ? '' : 'none'; }
+  setQuality(name) { if (this.el.qualityChip) this.el.qualityChip.textContent = name; }
 
   setPad(on) {
     this.el.padBadge.style.display = on ? '' : 'none';

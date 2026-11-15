@@ -111,10 +111,11 @@ export function buildDrone(spec) {
 
 export class DroneVisual {
   constructor(scene, spec) {
-    const { group, rotors, ledMats } = buildDrone(spec);
+    const { group, rotors, ledMats, materials } = buildDrone(spec);
     this.mesh = group;
     this.rotors = rotors;
     this.ledMats = ledMats;
+    this.materials = materials;
     this._spin = [0, 0, 0, 0];
     scene.add(group);
 
@@ -136,6 +137,18 @@ export class DroneVisual {
     for (let i = 0; i < this.trailLen; i++) {
       this._trailPos[i * 3] = pos.x; this._trailPos[i * 3 + 1] = pos.y; this._trailPos[i * 3 + 2] = pos.z;
     }
+  }
+
+  // sharp metal + stronger env reflections only on the high tier
+  applyVisualTier(cfg) {
+    const sharp = cfg.envPx >= 256;
+    const m = this.materials;
+    m.matMetal.roughness = sharp ? 0.25 : 0.35;
+    m.matBody.roughness = sharp ? 0.32 : 0.42;
+    const inten = cfg.envPx ? (sharp ? 1.15 : 0.9) : 1;
+    m.matMetal.envMapIntensity = inten;
+    m.matBody.envMapIntensity = inten;
+    m.matAccent.envMapIntensity = inten * 0.7;
   }
 
   update(dt, m, opts = {}) {

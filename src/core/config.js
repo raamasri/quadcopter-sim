@@ -1,6 +1,6 @@
 // Central configuration and shared constants for QuadSim.
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.3.0';
 
 export const CFG = {
   // World

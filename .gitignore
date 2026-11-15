@@ -8,3 +8,5 @@ qs-*.png
 page-*.png
 
 .playwright-mcp/
+.vercel
+.env*

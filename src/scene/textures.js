@@ -289,6 +289,23 @@ export function helipadTexture() {
   return toTex(c, { repeat: 1 });
 }
 
+// Tileable pond ripple normals: fbm micro-detail + two domain-warped sine
+// wave sets (integer cycles so the texture tiles seamlessly at any repeat).
+export function waterNormalTexture() {
+  const size = 256;
+  const n = valueNoise(777);
+  const h = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = x / size * 8, v = y / size * 8;
+      const warp = Math.sin(v * 1.5 + 1.3) * 1.1;
+      h[y * size + x] = 0.5 * fbm(n, u, v, 3, 2, 0.5)
+        + 0.3 * Math.sin(u * 2.5 + warp) + 0.2 * Math.sin(v * 3.0 - warp);
+    }
+  }
+  return toTex(heightToNormal(size, h, 1.6), { repeat: 5, srgb: false });
+}
+
 export function runwayTexture(seed = 12) {
   const W = 256, H = 1024;
   const c = document.createElement('canvas'); c.width = W; c.height = H;

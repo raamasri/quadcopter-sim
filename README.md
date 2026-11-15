@@ -55,11 +55,15 @@ Best results persist in `localStorage` (`quadsim.records.v2`).
 
 ## Stack
 
-- `three@0.170` + UnrealBloom post-processing (graceful fallback if unavailable)
+- `three@0.170` + UnrealBloom post-processing + Reflector water + PMREM env
+  reflections (graceful fallback if unavailable)
 - `vite@6` dev/build
 - Everything visual is generated at load: grass/asphalt/concrete/carbon/facade
   textures (with height→normal maps), lit-window night emissive facades,
-  helipad, runway, sky shader, stars
+  helipad, runway, sky shader with HDR sun disc + horizon glow, stars, pond
+  ripple normals
+- Quality presets Low/Med/High + Auto (hardware-detected, runtime auto-degrade
+  on sustained < 40 fps); persisted in settings
 - Audio is synthesized in WebAudio (motor bank, wind, gates, SFX) — zero assets
 
 ## Layout
@@ -72,8 +76,10 @@ src/
   core/cameraRig.js    chase / FPV / orbit / top / side / cinematic
   core/audio.js        WebAudio engine
   core/drones.js       4 airframes with different flight envelopes
+  core/quality.js      Low/Med/High tier maps + auto-degrade
   core/config.js       shared constants
-  scene/world.js       arena, course gates, cargo/hover markers, day-night
+  scene/world.js       arena, gates, markers, day-night, pond reflector, fog
+  scene/env.js         PMREM environment map baked from the procedural sky
   scene/textures.js    procedural texture factory
   scene/droneVisual.js drone mesh, rotors, LEDs, motion trail
   game/missions.js     mission framework + 6 modes + records

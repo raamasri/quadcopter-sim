@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { CFG, clamp, lerp, smoothstep, deg2rad } from '../core/config.js';
 import {
   grassTextures, asphaltTextures, concreteTextures, metalTexture,
-  facadeTexture, helipadTexture, runwayTexture
+  facadeTexture, helipadTexture, runwayTexture, waterNormalTexture
 } from './textures.js';
 
 const V = THREE.Vector3;
@@ -14,15 +14,50 @@ const UP = new V(0, 1, 0);
 const DAY = {
   skyTop: 0x2f7ad6, skyBot: 0xcfe6f5, sun: 0xfff2d4, sunI: 3.1,
   hemiSky: 0x9cc4ea, hemiGnd: 0x4a5a3a, hemiI: 0.95,
-  fog: 0xc4dbec, fogNear: 140, fogFar: 640, exposure: 1.06, star: 0
+  fog: 0xc4dbec, exposure: 1.15, star: 0
 };
 const NIGHT = {
   skyTop: 0x03060f, skyBot: 0x0b1424, sun: 0x9fb4ff, sunI: 0.55,
   hemiSky: 0x1a2942, hemiGnd: 0x080d12, hemiI: 0.32,
-  fog: 0x080f1c, fogNear: 45, fogFar: 420, exposure: 0.9, star: 1
+  fog: 0x080f1c, exposure: 0.9, star: 1
 };
+// pre-built linear Colors so the frame lerp never allocates
+for (const d of [DAY, NIGHT]) {
+  for (const k of ['skyTop', 'skyBot', 'sun', 'hemiSky', 'hemiGnd', 'fog']) d[k + 'C'] = new THREE.Color(d[k]);
+}
+DAY.sunDiscC = new THREE.Color(2.6, 1.95, 1.3);   // HDR sun disc -> blooms
+NIGHT.sunDiscC = new THREE.Color(0.85, 0.95, 1.35); // pale moon
+DAY.waterMirrorC = new THREE.Color(0x8fa6b8);
+NIGHT.waterMirrorC = new THREE.Color(0x2a3548);
+DAY.waterC = new THREE.Color(0x14555e);
+NIGHT.waterC = new THREE.Color(0x0a2531);
 
 function rng(seed) { let s = seed >>> 0 || 1; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+
+// Sky gradient + HDR sun disc + warm horizon glow. Shared with env.js PMREM
+// baking so reflections and the visible sky always agree.
+export function createSkyMaterial() {
+  return new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: {
+      topColor: { value: new THREE.Color(DAY.skyTop) },
+      bottomColor: { value: new THREE.Color(DAY.skyBot) },
+      offset: { value: 33 }, exponent: { value: 0.75 },
+      sunDir: { value: new THREE.Vector3(120, 180, 60).normalize() },
+      sunCol: { value: new THREE.Color().copy(DAY.sunDiscC) },
+      night: { value: 0 }
+    },
+    vertexShader: `varying vec3 vP; void main(){ vec4 wp=modelMatrix*vec4(position,1.0); vP=wp.xyz; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+    fragmentShader: `uniform vec3 topColor; uniform vec3 bottomColor; uniform float offset; uniform float exponent; uniform vec3 sunDir; uniform vec3 sunCol; uniform float night; varying vec3 vP;
+      void main(){ vec3 dir=normalize(vP+vec3(0.0,offset,0.0)); float t=pow(max(dir.y,0.0),exponent);
+        float sd=max(dot(dir,sunDir),0.0);
+        float disc=smoothstep(mix(0.9982,0.99945,night),mix(0.9988,0.99975,night),sd);
+        float halo=pow(sd,220.0)*0.8+pow(sd,7.0)*0.08;
+        float glow=pow(max(dot(normalize(dir.xz+vec2(1e-4)),normalize(sunDir.xz+vec2(1e-4))),0.0),4.0)*pow(1.0-abs(dir.y),5.0);
+        vec3 col=mix(bottomColor,topColor,t)+sunCol*(disc+halo)*(1.0-night*0.35)+vec3(1.0,0.52,0.22)*glow*0.38*(1.0-night);
+        gl_FragColor=vec4(col,1.0);}`
+  });
+}
 
 export class World {
   constructor(scene) {
@@ -41,6 +76,10 @@ export class World {
     this._wind = null;
     this._windT = 0;
     this._flags = [];
+    this._tier = null;
+    this._fogDensity = 0.0035;
+    this._water = null;
+    this.onNightChanged = null;
 
     this._buildSky();
     this._buildLights();
@@ -53,18 +92,10 @@ export class World {
 
   setWindField(windField) { this._wind = windField || null; }
 
+  get exposure() { return DAY.exposure + (NIGHT.exposure - DAY.exposure) * this._nightMix; }
+
   _buildSky() {
-    this.skyMat = new THREE.ShaderMaterial({
-      side: THREE.BackSide, depthWrite: false, fog: false,
-      uniforms: {
-        topColor: { value: new THREE.Color(DAY.skyTop) },
-        bottomColor: { value: new THREE.Color(DAY.skyBot) },
-        offset: { value: 33 }, exponent: { value: 0.75 }
-      },
-      vertexShader: `varying vec3 vP; void main(){ vec4 wp=modelMatrix*vec4(position,1.0); vP=wp.xyz; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-      fragmentShader: `uniform vec3 topColor; uniform vec3 bottomColor; uniform float offset; uniform float exponent; varying vec3 vP;
-        void main(){ float h=normalize(vP+vec3(0.0,offset,0.0)).y; float t=pow(max(h,0.0),exponent); gl_FragColor=vec4(mix(bottomColor,topColor,t),1.0);}`
-    });
+    this.skyMat = createSkyMaterial();
     this.sky = new THREE.Mesh(new THREE.SphereGeometry(1000, 32, 16), this.skyMat);
     this.sky.frustumCulled = false;
     this.scene.add(this.sky);
@@ -83,7 +114,7 @@ export class World {
     this.stars.frustumCulled = false;
     this.scene.add(this.stars);
 
-    this.scene.fog = new THREE.Fog(DAY.fog, DAY.fogNear, DAY.fogFar);
+    this.scene.fog = new THREE.FogExp2(DAY.fog, this._fogDensity);
   }
 
   _buildLights() {
@@ -93,18 +124,27 @@ export class World {
     this.sun.position.set(120, 180, 60);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
-    const s = 26; Object.assign(this.sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 1, far: 520 });
+    const s = 22; Object.assign(this.sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 1, far: 520 });
     this.sun.shadow.bias = -0.0005;
     this._sunTarget = new THREE.Object3D(); this.scene.add(this._sunTarget);
     this.sun.target = this._sunTarget; this.scene.add(this.sun);
     this._sunBase = new THREE.Vector3(120, 180, 60);
+    // orthonormal basis of the (fixed-orientation) shadow light for texel snapping
+    const mtx = new THREE.Matrix4().lookAt(this._sunBase, new THREE.Vector3(0, 0, 0), UP);
+    this._slRight = new THREE.Vector3().setFromMatrixColumn(mtx, 0);
+    this._slUp = new THREE.Vector3().setFromMatrixColumn(mtx, 1);
+    this._slAxis = this._sunBase.clone().normalize();
+    this._shadowHalf = s;
+    this._texel = (2 * s) / 2048;
+    this._su = null; this._sv = null;
+    this._shadowOn = true;
   }
 
   _buildGround() {
     this.grass = grassTextures(7);
     this.ground = new THREE.Mesh(
       new THREE.PlaneGeometry(1600, 1600),
-      new THREE.MeshStandardMaterial({ map: this.grass.map, normalMap: this.grass.normalMap, roughness: 1, metalness: 0 })
+      new THREE.MeshStandardMaterial({ map: this.grass.map, normalMap: this.grass.normalMap, roughness: 1, metalness: 0, envMapIntensity: 0.35 })
     );
     this.ground.rotation.x = -Math.PI / 2;
     this.ground.receiveShadow = true;
@@ -139,7 +179,7 @@ export class World {
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06; this.scene.add(ring);
     // perimeter light poles every 24 degrees
     const poleGeo = new THREE.CylinderGeometry(0.12, 0.16, 7, 6);
-    const poleMat = new THREE.MeshStandardMaterial({ map: metalTexture(88, '#33383f'), roughness: 0.5, metalness: 0.7 });
+    const poleMat = new THREE.MeshStandardMaterial({ map: metalTexture(88, '#33383f'), roughness: 0.5, metalness: 0.7, envMapIntensity: 0.9 });
     const bulbMatDay = new THREE.MeshStandardMaterial({ color: 0x111418, emissive: 0xfff0b0, emissiveIntensity: 0, toneMapped: false });
     this._perimBulbs = [];
     for (let i = 0; i < 15; i++) {
@@ -175,7 +215,7 @@ export class World {
       const palette = (n() * 5) | 0;
       const cols = Math.max(4, Math.round(w / 2.4)), rows = Math.max(6, Math.round(h / 3.2));
       const fac = facadeTexture(palette, (n() * 1e6) | 0, cols, rows);
-      const mat = new THREE.MeshStandardMaterial({ map: fac.map, emissiveMap: fac.emissiveMap, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.82, metalness: 0.12 });
+      const mat = new THREE.MeshStandardMaterial({ map: fac.map, emissiveMap: fac.emissiveMap, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.82, metalness: 0.12, envMapIntensity: 0.45 });
       const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
       const x = Math.cos(bp.a) * bp.dist, z = Math.sin(bp.a) * bp.dist;
       b.position.set(x, h / 2, z);
@@ -188,21 +228,24 @@ export class World {
       if (bp.inside) this._roofSpots.push({ x, z, h });
     }
 
+    this._pickPondPos();
+
     // trees + rocks inside arena
-    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3524, roughness: 1 });
-    const foliageMat = new THREE.MeshStandardMaterial({ color: 0x2e5d2f, roughness: 1 });
-    const foliageMat2 = new THREE.MeshStandardMaterial({ color: 0x3c6b32, roughness: 1 });
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3524, roughness: 1, envMapIntensity: 0.3 });
+    const foliageMat = new THREE.MeshStandardMaterial({ color: 0x2e5d2f, roughness: 1, envMapIntensity: 0.3 });
+    const foliageMat2 = new THREE.MeshStandardMaterial({ color: 0x3c6b32, roughness: 1, envMapIntensity: 0.3 });
     const trunkGeo = new THREE.CylinderGeometry(0.16, 0.24, 1.8, 6);
     const coneGeo = new THREE.ConeGeometry(1.3, 3, 7);
     const blobGeo = new THREE.IcosahedronGeometry(1.3, 0);
     const rockGeo = new THREE.DodecahedronGeometry(0.9, 0);
-    const rockMat = new THREE.MeshStandardMaterial({ map: concrete.map, color: 0x9a9a9a, roughness: 1, metalness: 0 });
+    const rockMat = new THREE.MeshStandardMaterial({ map: concrete.map, color: 0x9a9a9a, roughness: 1, metalness: 0, envMapIntensity: 0.3 });
     for (let i = 0; i < 90; i++) {
       const a = n() * Math.PI * 2;
       const dist = 14 + n() * (CFG.arenaR - 24);
       const x = Math.cos(a) * dist, z = Math.sin(a) * dist;
       if (Math.hypot(x - this.padPos.x, z - this.padPos.z) < 9) continue;
       if (Math.abs(x + 30) < 8) continue;
+      if (Math.hypot(x - this.pondPos.x, z - this.pondPos.z) < 32) continue; // keep the pond clear
       const s = 0.7 + n() * 1.3;
       if (n() < 0.75) {
         const g = new THREE.Group();
@@ -222,7 +265,7 @@ export class World {
 
   // ---- wind-reactive dressing: windsock, roof flags, dust motes ----
   _buildWindDressing() {
-    const metalPole = new THREE.MeshStandardMaterial({ color: 0xc4ccd6, roughness: 0.45, metalness: 0.7 });
+    const metalPole = new THREE.MeshStandardMaterial({ color: 0xc4ccd6, roughness: 0.45, metalness: 0.7, envMapIntensity: 1.0 });
     const n = rng(2027);
 
     // windsock ~6 m beside the pad
@@ -264,9 +307,17 @@ export class World {
     }
     const dg = new THREE.BufferGeometry();
     dg.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    const dcv = document.createElement('canvas'); dcv.width = dcv.height = 32;
+    const dctx = dcv.getContext('2d');
+    const grad = dctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.4, 'rgba(255,255,255,0.5)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    dctx.fillStyle = grad; dctx.fillRect(0, 0, 32, 32);
     const dm = new THREE.PointsMaterial({
-      color: 0xffe6c8, size: 0.075, transparent: true, opacity: 0.22,
-      depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true
+      color: 0xffe6c8, size: 0.14, transparent: true, opacity: 0.22,
+      depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+      map: new THREE.CanvasTexture(dcv)
     });
     const pts = new THREE.Points(dg, dm); pts.frustumCulled = false; this.scene.add(pts);
     this._dust = pts; this._dustArr = arr; this._dustCount = count; this._dustMat = dm;
@@ -345,7 +396,7 @@ export class World {
       const g = gates[i];
       const radius = g.radius || 3.4;
       if (!torusGeoCache[radius]) torusGeoCache[radius] = new THREE.TorusGeometry(radius, 0.18, 12, 44);
-      const mat = new THREE.MeshStandardMaterial({ color: 0xff7a1a, emissive: 0xff6a00, emissiveIntensity: 0.2, roughness: 0.5, metalness: 0.4 });
+      const mat = new THREE.MeshStandardMaterial({ color: 0xff7a1a, emissive: 0xff6a00, emissiveIntensity: 0.2, roughness: 0.5, metalness: 0.4, envMapIntensity: 0.9 });
       const ring = new THREE.Mesh(torusGeoCache[radius], mat);
       ring.castShadow = true;
       const grp = new THREE.Group(); grp.add(ring);
@@ -456,35 +507,118 @@ export class World {
     return true;
   }
 
+  // ---- reflecting pond (Reflector class injected by main, lazy addon) ----
+  installWater(Reflector) {
+    if (this._water || !Reflector) return;
+    const p = this.pondPos;
+    const shore = new THREE.Mesh(new THREE.CircleGeometry(29.6, 64),
+      new THREE.MeshStandardMaterial({ color: 0x5c5342, roughness: 1, metalness: 0 }));
+    shore.rotation.x = -Math.PI / 2; shore.position.set(p.x, 0.015, p.z); shore.receiveShadow = true;
+    const mirror = new Reflector(new THREE.CircleGeometry(28, 72),
+      { clipBias: 0.004, textureWidth: 512, textureHeight: 512, color: 0x8fa6b8 });
+    mirror.rotation.x = -Math.PI / 2; mirror.position.set(p.x, 0.02, p.z);
+    const rip = waterNormalTexture();
+    const overlay = new THREE.Mesh(new THREE.CircleGeometry(28.06, 72),
+      new THREE.MeshStandardMaterial({
+        color: 0x14555e, transparent: true, opacity: 0.35, roughness: 0.16, metalness: 0.3,
+        normalMap: rip, normalScale: new THREE.Vector2(0.9, 0.9), depthWrite: false, envMapIntensity: 0.9
+      }));
+    overlay.rotation.x = -Math.PI / 2; overlay.position.set(p.x, 0.055, p.z);
+    this.scene.add(shore, mirror, overlay);
+    this._water = { shore, mirror, overlay, rip };
+    if (this._tier) this._setWaterVisible(!!this._tier.reflector);
+  }
+
+  _setWaterVisible(on) {
+    const w = this._water;
+    w.mirror.visible = on; w.overlay.visible = on; w.shore.visible = on;
+  }
+
+  // Maximize clearance to buildings/runway/pad; pond edge sits outside the
+  // gate circuits (<= ~73 m) and inside the perimeter (220 m).
+  _pickPondPos() {
+    let best = { x: 108, z: 0 }, bestClear = -Infinity;
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2 + 0.13;
+      const x = Math.cos(a) * 108, z = Math.sin(a) * 108;
+      let clear = Math.hypot(x - this.padPos.x, z - this.padPos.z) - 28;
+      const rx = clamp(x, -35.5, -24.5), rz = clamp(z, -60, 60);
+      clear = Math.min(clear, Math.hypot(x - rx, z - rz) - 28);
+      for (const c of this.colliders) {
+        if (c.t !== 'b') continue;
+        clear = Math.min(clear, Math.hypot(x - c.x, z - c.z) - Math.hypot(c.hx, c.hz) - 28);
+      }
+      if (clear > bestClear) { bestClear = clear; best = { x, z }; }
+    }
+    this.pondPos = new V(best.x, 0, best.z);
+  }
+
+  // ---- quality tier (fog density, water visibility, shadow map size) ----
+  applyTier(cfg, userShadows = true) {
+    this._tier = cfg;
+    this._fogDensity = cfg.fogDensity;
+    if (this._water) this._setWaterVisible(!!cfg.reflector);
+    const on = cfg.shadows && userShadows !== false;
+    const size = cfg.mapSize;
+    const resized = this.sun.shadow.mapSize.x !== size;
+    if (resized) this.sun.shadow.mapSize.set(size, size);
+    // three rebuilds the shadow map only after dispose + null
+    if (this.sun.shadow.map && (!on || resized)) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
+    this._shadowOn = on;
+    this._texel = (2 * this._shadowHalf) / size;
+    this._su = null; this._sv = null;
+  }
+
+  // Sun shadow box follows the drone with the center snapped to the shadow
+  // texel grid (light-space right/up) so contact shadows don't crawl.
+  _updateShadowFollow(pos) {
+    if (!this._shadowOn) return;
+    const u = pos.dot(this._slRight), v = pos.dot(this._slUp), w = pos.dot(this._slAxis);
+    const su = Math.floor(u / this._texel) * this._texel + this._texel * 0.5;
+    const sv = Math.floor(v / this._texel) * this._texel + this._texel * 0.5;
+    if (su === this._su && sv === this._sv) return;
+    this._su = su; this._sv = sv;
+    this._sunTarget.position.set(0, 0, 0)
+      .addScaledVector(this._slRight, su)
+      .addScaledVector(this._slUp, sv)
+      .addScaledVector(this._slAxis, w);
+    this.sun.position.copy(this._sunTarget.position).add(this._sunBase);
+  }
+
   // ---- day/night + per-frame ----
-  setNight(v) { this.night = !!v; }
+  setNight(v) {
+    const on = !!v;
+    if (on === this.night) return;
+    this.night = on;
+    if (this.onNightChanged) this.onNightChanged();
+  }
 
   update(dt, dronePos, camPos) {
     this._t += dt;
     const target = this.night ? 1 : 0;
     this._nightMix += (target - this._nightMix) * Math.min(1, dt * 2.2);
     const m = this._nightMix;
-    const lerpC = (a, b) => new THREE.Color(a).lerp(new THREE.Color(b), m);
 
-    this.skyMat.uniforms.topColor.value.copy(lerpC(DAY.skyTop, NIGHT.skyTop));
-    this.skyMat.uniforms.bottomColor.value.copy(lerpC(DAY.skyBot, NIGHT.skyBot));
-    this.sun.color.copy(lerpC(DAY.sun, NIGHT.sun));
+    const skyU = this.skyMat.uniforms;
+    skyU.topColor.value.copy(DAY.skyTopC).lerp(NIGHT.skyTopC, m);
+    skyU.bottomColor.value.copy(DAY.skyBotC).lerp(NIGHT.skyBotC, m);
+    skyU.sunCol.value.copy(DAY.sunDiscC).lerp(NIGHT.sunDiscC, m);
+    skyU.night.value = m;
+    this.sun.color.copy(DAY.sunC).lerp(NIGHT.sunC, m);
     this.sun.intensity = DAY.sunI + (NIGHT.sunI - DAY.sunI) * m;
-    this.hemi.color.copy(lerpC(DAY.hemiSky, NIGHT.hemiSky));
-    this.hemi.groundColor.copy(lerpC(DAY.hemiGnd, NIGHT.hemiGnd));
+    this.hemi.color.copy(DAY.hemiSkyC).lerp(NIGHT.hemiSkyC, m);
+    this.hemi.groundColor.copy(DAY.hemiGndC).lerp(NIGHT.hemiGndC, m);
     this.hemi.intensity = DAY.hemiI + (NIGHT.hemiI - DAY.hemiI) * m;
-    this.scene.fog.color.copy(lerpC(DAY.fog, NIGHT.fog));
-    this.scene.fog.near = DAY.fogNear + (NIGHT.fogNear - DAY.fogNear) * m;
-    this.scene.fog.far = DAY.fogFar + (NIGHT.fogFar - DAY.fogFar) * m;
+    this.scene.fog.color.copy(DAY.fogC).lerp(NIGHT.fogC, m);
+    this.scene.fog.density = this._fogDensity * (1 + 0.75 * m);
     this.starMat.opacity = m;
 
     const winI = smoothstep(0.35, 0.8, m) * 1.1;
     for (const fm of this._facadeMats) fm.emissiveIntensity = winI;
     for (const bm of this._perimBulbs) bm.emissiveIntensity = winI * 1.4;
 
-    // shadow box follows drone
-    this._sunTarget.position.copy(dronePos);
-    this.sun.position.set(dronePos.x + this._sunBase.x, this._sunBase.y, dronePos.z + this._sunBase.z);
+    // shadow box follows drone (texel-snapped, guarded)
+    this._updateShadowFollow(dronePos);
     this.sky.position.set(dronePos.x, 0, dronePos.z);
     this.stars.position.set(dronePos.x, 0, dronePos.z);
 
@@ -506,6 +640,16 @@ export class World {
       const glowP = 1.2 + Math.sin(this._t * 4) * 0.5;
       mk.ring.material.emissiveIntensity = mk.active ? glowP : 0.2;
       mk.beam.material.opacity = mk.active ? 0.09 + Math.sin(this._t * 3) * 0.03 : 0.02;
+    }
+
+    // pond: night dimming + slow ripple drift
+    if (this._water) {
+      const w = this._water;
+      w.mirror.material.uniforms.color.value.copy(DAY.waterMirrorC).lerp(NIGHT.waterMirrorC, m);
+      w.overlay.material.color.copy(DAY.waterC).lerp(NIGHT.waterC, m);
+      w.overlay.material.opacity = lerp(0.35, 0.5, m);
+      w.rip.offset.x += dt * 0.011;
+      w.rip.offset.y += dt * 0.006;
     }
 
     this._updateWindDressing(dt, dronePos, camPos);

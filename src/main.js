@@ -7,9 +7,11 @@ import { CameraRig } from './core/cameraRig.js';
 import { FlightModel } from './core/physics.js';
 import { WindField } from './core/wind.js';
 import { CFG } from './core/config.js';
+import { Quality } from './core/quality.js';
 import { AudioEngine } from './core/audio.js';
 import { droneById, DRONES } from './core/drones.js';
 import { World } from './scene/world.js';
+import { EnvReflections } from './scene/env.js';
 import { DroneVisual } from './scene/droneVisual.js';
 import { HUD } from './ui/hud.js';
 import { Screens, loadSettings, saveSettings } from './ui/screens.js';
@@ -31,7 +33,7 @@ try {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.15;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(64, window.innerWidth / window.innerHeight, 0.05, 1800);
@@ -53,13 +55,21 @@ try {
     composer.addPass(new OutputPass());
   } catch { composer = null; }
 
+  // water reflector class fetched alongside bloom to keep addons lazy-loaded
+  let ReflectorClass = null;
+  try { ({ Reflector: ReflectorClass } = await import('three/addons/objects/Reflector.js')); } catch { ReflectorClass = null; }
+
   const settings = loadSettings();
+  const quality = new Quality(settings);
   const world = new World(scene);
   world.setNight(settings.night);
+  if (ReflectorClass) world.installWater(ReflectorClass);
   const wind = new WindField(CFG);
   wind.setStrength(settings.wind);
   world.setWindField(wind);
   const hud = new HUD(document);
+  const env = new EnvReflections(renderer, scene, () => world.skyMat);
+  world.onNightChanged = () => env.schedule(quality.cfg.envPx); // debounced bake after transition settles
   const audio = new AudioEngine();
   audio.setVolume(settings.volume);
   audio.setEnabled(settings.sound);
@@ -67,6 +77,7 @@ try {
   let spec = droneById(settings.drone);
   let model = new FlightModel(spec, wind);
   let visual = new DroneVisual(scene, spec);
+  visual.applyVisualTier(quality.cfg);
 
   const rig = new CameraRig(camera);
   const controls = new Controls(canvas);
@@ -94,6 +105,7 @@ try {
     scene.remove(visual.mesh); scene.remove(visual.trail);
     visual.dispose(scene);
     visual = new DroneVisual(scene, spec);
+    visual.applyVisualTier(quality.cfg);
     model = new FlightModel(spec, wind);
     ctx.model = model;
     hud.setHoverPoint(model.hoverThrottle);
@@ -159,14 +171,43 @@ try {
       if ('sensitivity' in patch) controls.sensitivity = patch.sensitivity;
       if ('night' in patch) world.setNight(patch.night);
       if ('wind' in patch) wind.setStrength(patch.wind);
-      if ('shadows' in patch) {
-        renderer.shadowMap.enabled = patch.shadows;
-        scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; }); });
-      }
+      if ('quality' in patch) { quality.setPreset(patch.quality); applyQuality(false); }
+      if ('shadows' in patch) applyQuality(false);
     }
   });
   screens.showMenu();
   rig.setMode(2);
+
+  // ---------- quality tier application (live, no reload) ----------
+  let lastEnvPx = -1;
+  function applyQuality(autoDegraded) {
+    const cfg = quality.cfg;
+    // pixel ratio cap + bloom toggle (composer needs its own ratio update)
+    const dpr = Math.min(window.devicePixelRatio || 1, cfg.pixelRatio);
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (composer) { composer.setPixelRatio(dpr); composer.setSize(window.innerWidth, window.innerHeight); }
+    if (bloom) bloom.enabled = cfg.bloom;
+    // shadows: master flag respects user 'shadows' toggle AND tier; recompile
+    // materials only when the master enabled state actually flips
+    const shadowsOn = cfg.shadows && settings.shadows !== false;
+    const flipped = renderer.shadowMap.enabled !== shadowsOn;
+    renderer.shadowMap.enabled = shadowsOn;
+    // world: fog density, water reflector visibility, shadow map size (dispose)
+    world.applyTier(cfg, settings.shadows !== false);
+    // drone material sharpness for the tier
+    visual.applyVisualTier(cfg);
+    // environment reflections (bake size 0 disables); only rebake when the
+    // tier's bake size actually changed — day/night re-bakes come through
+    // world.onNightChanged. Renderer AA is init-only; tier changes apply live
+    // to shadows/env/post, never forcing a reload.
+    if (cfg.envPx !== lastEnvPx) { lastEnvPx = cfg.envPx; env.schedule(cfg.envPx, false); }
+    if (flipped) scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; }); });
+    hud.setQuality(quality.resolved.toUpperCase());
+    screens.setQualityResolved(quality.resolved.toUpperCase());
+    if (autoDegraded) hud.toast('Quality lowered to keep 60fps', 2200);
+  }
+  applyQuality(false);
 
   // ---------- control callbacks ----------
   let armedLatch = false;
@@ -306,7 +347,12 @@ try {
     });
     hud.setWind({ visible: state === 'play' && wind.strength > 0, heading: wind.headingDeg, speed: wind.baseSpeed });
 
+    renderer.toneMappingExposure = world.exposure;
     if (composer) composer.render(); else renderer.render(scene, camera);
+
+    // sustained low fps in play -> one-time auto-degrade
+    if (quality.update(dt, fps, state === 'play')) applyQuality(true);
+
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -328,6 +374,7 @@ try {
         night: world.night,
         windLevel: wind.level,
         windSpeed: +wind.baseSpeed.toFixed(2),
+        quality: quality.resolved,
         fps: Math.round(fps)
       };
     },
