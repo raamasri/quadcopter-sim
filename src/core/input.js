@@ -121,6 +121,24 @@ export class Controls {
 
   _applyExpo(v) { return expo(v, this.sensitivity * 0.6); }
 
+  // v0.9.0 gamepad rumble (dual-rumble). Silently no-ops when the pad has no
+  // vibrationActuator (Safari) or playEffect rejects (Firefox permission).
+  rumble(ms = 180, strong = 0.6, weak = 0.35) {
+    try {
+      if (this.padIndex < 0 || !navigator.getGamepads) return;
+      const gp = navigator.getGamepads()[this.padIndex];
+      const va = gp && gp.vibrationActuator;
+      if (!va || !va.playEffect) return;
+      const p = va.playEffect('dual-rumble', {
+        startDelay: 0,
+        duration: Math.max(1, ms),
+        strongMagnitude: Math.max(0, Math.min(1, strong)),
+        weakMagnitude: Math.max(0, Math.min(1, weak))
+      });
+      if (p && p.catch) p.catch(() => {});
+    } catch { /* haptics unsupported */ }
+  }
+
   // Call once per frame. Returns flight command + consumed mouse delta.
   update(dt) {
     this._pollPad(dt);

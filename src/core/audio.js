@@ -104,6 +104,8 @@ export class AudioEngine {
   }
 
   gate(combo = 0) { this._blip(760 + Math.min(combo, 8) * 90, 0.16, 'triangle', 0.2); this._blip(1500 + combo * 120, 0.1, 'sine', 0.08, 0, 0.05); }
+  // v0.9.0 crisp gate-threading confirmation: fast two-tone up-chirp (660->990Hz)
+  gateBlip() { this._blip(660, 0.045, 'sine', 0.15, 820); this._blip(820, 0.06, 'sine', 0.15, 990, 0.045); }
   pickup() { this._blip(520, 0.12, 'sine', 0.18, 780); }
   deliver() { this._blip(660, 0.12, 'sine', 0.18); this._blip(880, 0.14, 'sine', 0.18, 0, 0.12); this._blip(1170, 0.2, 'sine', 0.18, 0, 0.24); }
   arm() { this._blip(440, 0.09, 'square', 0.1); this._blip(660, 0.09, 'square', 0.1, 0, 0.1); this._blip(880, 0.12, 'square', 0.1, 0, 0.2); }

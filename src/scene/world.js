@@ -80,6 +80,7 @@ export class World {
     this._fogDensity = 0.0035;
     this._water = null;
     this.onNightChanged = null;
+    this.onGatePass = null; // v0.9.0: set by main -> gate flash/blip/HUD feedback
 
     this._buildSky();
     this._buildLights();
@@ -411,7 +412,7 @@ export class World {
       this._gateRings.push(grp);
       this._gateDefs.push({
         pos: new V(g.pos[0], g.pos[1], g.pos[2]), normal, radius,
-        passed: false, index: i, ring, mat, disc, label: g.label || ''
+        passed: false, index: i, ring, mat, disc, label: g.label || '', flash: 0
       });
     }
     this._nextGate = 0; this.gatesPassed = 0;
@@ -424,7 +425,7 @@ export class World {
   }
 
   resetCourse() {
-    for (const d of this._gateDefs) d.passed = false;
+    for (const d of this._gateDefs) { d.passed = false; d.flash = 0; }
     this.gatesPassed = 0; this._nextGate = 0; this._refreshGateLook();
   }
 
@@ -437,8 +438,9 @@ export class World {
     const def = this._gateDefs[this._nextGate];
     if (!def) return false;
     if (this._cross(def, prevPos, pos)) {
-      def.passed = true; this.gatesPassed++; this._nextGate++;
+      def.passed = true; def.flash = 1; this.gatesPassed++; this._nextGate++;
       this._refreshGateLook();
+      if (this.onGatePass) this.onGatePass(def);
       return { gate: def, index: def.index };
     }
     return false;
@@ -448,7 +450,7 @@ export class World {
   checkAnyGate(prevPos, pos) {
     for (const def of this._gateDefs) {
       if (def.passed) continue;
-      if (this._cross(def, prevPos, pos)) { def.passed = true; this.gatesPassed++; this._refreshGateLook(); return { gate: def, index: def.index }; }
+      if (this._cross(def, prevPos, pos)) { def.passed = true; def.flash = 1; this.gatesPassed++; this._refreshGateLook(); if (this.onGatePass) this.onGatePass(def); return { gate: def, index: def.index }; }
     }
     return false;
   }
@@ -622,14 +624,21 @@ export class World {
     this.sky.position.set(dronePos.x, 0, dronePos.z);
     this.stars.position.set(dronePos.x, 0, dronePos.z);
 
-    // gate next-pulse
+    // gate next-pulse + pass flash (v0.9.0: ring emissive spike ~0.5s decay)
     const pulse = 1.2 + Math.sin(this._t * 5) * 0.6;
     for (const d of this._gateDefs) {
-      const want = d.passed ? 0.08 : d.userDataNext ? pulse : 0.35;
-      d.mat.emissiveIntensity += (want - d.mat.emissiveIntensity) * Math.min(1, dt * 8);
+      let want = d.passed ? 0.08 : d.userDataNext ? pulse : 0.35;
+      if (d.flash > 0) want += d.flash * 7;
+      d.mat.emissiveIntensity += (want - d.mat.emissiveIntensity) * Math.min(1, dt * 10);
       if (d.userDataNext) { const sc = 1 + Math.sin(this._t * 5) * 0.03; d.ring.scale.setScalar(sc); }
       else d.ring.scale.setScalar(1);
       d.disc.material.opacity = d.passed ? 0.02 : d.userDataNext ? 0.08 + Math.sin(this._t * 5) * 0.05 : 0.03;
+      if (d.flash > 0) {
+        d.flash = Math.max(0, d.flash - dt * 2); // 0.5s decay
+        const pop = 1 + d.flash * d.flash * 0.12;
+        d.ring.scale.setScalar(pop);
+        d.disc.material.opacity = Math.max(d.disc.material.opacity, d.flash * 0.28);
+      }
     }
 
     // markers animation

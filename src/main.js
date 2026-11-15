@@ -102,6 +102,7 @@ try {
       hud.setGhostDelta(elapsed - gt[idx]);
     }
   };
+  let autoDisarmT = 0; // v0.9.0 auto-disarm countdown (seconds; before first parkOnPad)
   parkOnPad();
 
   const ghostRec = new GhostRecorder();
@@ -112,6 +113,10 @@ try {
   let mission = null;
   let helpOpen = false;
   let respawnTimer = -1;
+
+  // v0.9.0 gate-pass feedback: ring flash is decayed in world.update; audio +
+  // HUD counter pop fire through this single hook (checkGate + checkAnyGate).
+  world.onGatePass = () => { audio.gateBlip(); hud.popGates(); };
 
   hud.setView(rig.name);
   hud.setMission('');
@@ -133,6 +138,8 @@ try {
     model.spawn(world.padPos.x, 0.24, world.padPos.z, 0);
     visual.reset(model.pos);
     ctx.maxSpeed = 0;
+    autoDisarmT = 0;
+    rig.trauma = 0; // clear any crash shake on respawn/park
     minimap.reset();
   }
 
@@ -353,9 +360,16 @@ try {
       // physics events
       for (const e of model.events) {
         if (mission) mission.onEvent(e);
-        if (e.t === 'impact') audio.impact();
+        if (e.t === 'impact') {
+          audio.impact();
+          rig.addTrauma(Math.min(0.25, e.speed * 0.03)); // capped impact shake
+          const impactK = e.speed / 12;
+          controls.rumble(180, Math.min(1, impactK), Math.min(1, impactK * 0.6));
+        }
         if (e.t === 'crash') {
           audio.crash(1);
+          rig.addTrauma(1);
+          controls.rumble(400, 1, 0.6);
           if (mission && mission.id === 'free') { respawnTimer = 1.6; hud.toast('WRECKED · respawning...', 1500); }
         }
       }
@@ -378,6 +392,21 @@ try {
         }
       }
       audio.lowBatteryBeep(dt, model.armed ? model.battery : 1);
+
+      // v0.9.0 Betaflight-style auto-disarm: armed + landed (or deck-low and
+      // still) with neutral sticks for CFG.autoDisarmDelay -> same disarm path.
+      // Lives in the play branch so pause freezes the timer; any stick beyond
+      // deadzone cancels it.
+      if (model.armed && !model.crashed) {
+        const vel = model.vel;
+        const grounded = model.landed || (model.pos.y < 0.25 && vel.lengthSq() < 0.25);
+        const stickMoved = Math.abs(input.pitch) > 0.05 || Math.abs(input.roll) > 0.05 ||
+          Math.abs(input.yaw) > 0.05 || input.throttle > 0.05;
+        if (grounded && !stickMoved) {
+          autoDisarmT += dt;
+          if (autoDisarmT >= CFG.autoDisarmDelay) { autoDisarmT = 0; doArm(false); hud.toast('AUTO DISARM', 1400); }
+        } else autoDisarmT = 0;
+      } else autoDisarmT = 0;
 
       if (respawnTimer > 0) {
         respawnTimer -= dt;
@@ -457,6 +486,7 @@ try {
         touchEnabled: touch.enabled,
         ghostActive: !!(ghostData && settings.ghost === 'on' && mission && mission.id === 'tt' && (state === 'play' || state === 'pause')),
         throttleMode: settings.throttleMode || 'hold',
+        trauma: +rig.trauma.toFixed(3),
         fps: Math.round(fps)
       };
     },

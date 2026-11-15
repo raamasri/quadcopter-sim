@@ -193,6 +193,13 @@ html, body {
 .big-top span { font-size: 40px; font-weight: 800; color: #fff; line-height: 1; font-variant-numeric: tabular-nums; text-shadow: 0 0 22px rgba(255, 138, 42, 0.35); }
 .big-label { font-size: 10px; letter-spacing: 3px; color: var(--amber); margin-top: 4px; }
 .big-sub { font-size: 10px; color: var(--muted); margin-top: 3px; letter-spacing: 1px; }
+/* v0.9.0 gate-pass counter pop */
+#big-val.pop { display: inline-block; animation: counterPop 0.4s ease-out; }
+@keyframes counterPop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.25); text-shadow: 0 0 26px rgba(255, 168, 66, 0.95); }
+  100% { transform: scale(1); }
+}
 
 .battery.right { right: 16px; bottom: 16px; width: 190px; }
 .battery-row { display: flex; align-items: center; gap: 8px; }

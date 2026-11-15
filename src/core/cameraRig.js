@@ -1,10 +1,12 @@
-// Multi-view camera rig with speed-reactive FOV.
+// Multi-view camera rig with speed-reactive FOV + trauma shake (v0.9.0).
 
 import * as THREE from 'three';
+import { deg2rad } from './config.js';
 
 const V = THREE.Vector3;
 const CAMERA_MODES = ['CHASE', 'FPV', 'ORBIT', 'TOP', 'SIDE', 'CINEMATIC'];
 const damp = (a, b, l, dt) => b + (a - b) * Math.exp(-l * dt);
+const TRAUMA_DECAY = 1.6; // trauma/sec (classic: trauma linear decay, shake = trauma^2)
 
 export class CameraRig {
   constructor(camera) {
@@ -17,7 +19,13 @@ export class CameraRig {
     this._f = new V(); this._u = new V(); this._hf = new V();
     this._desired = new V(); this._desiredLook = new V(); this._desiredUp = new V(0, 1, 0);
     this._perp = new V(); this._off = new V();
+    // v0.9.0 trauma shake: add via addTrauma(), decays exponentially.
+    this.trauma = 0;
+    this._shakeT = 0;
+    this._shake = new V();
   }
+
+  addTrauma(v) { this.trauma = Math.min(1, this.trauma + v); }
 
   get name() { return CAMERA_MODES[this.index]; }
   setMode(i) { this.index = ((i % CAMERA_MODES.length) + CAMERA_MODES.length) % CAMERA_MODES.length; this._init = true; }
@@ -81,5 +89,34 @@ export class CameraRig {
     this.camera.up.copy(this._desiredUp);
     this.camera.lookAt(this._look);
     if (Math.abs(this.camera.fov - this._fov) > 0.001) { this.camera.fov = this._fov; this.camera.updateProjectionMatrix(); }
+
+    this._applyTrauma(dt, spd);
+  }
+
+  // Trauma shake + FPV speed rumble, applied AFTER the rig's normal transform
+  // (camera-local translate/rotate post-offset) so it affects every view incl.
+  // FPV. Classic trauma^2 envelope with exponential decay; noise from layered
+  // irrational-frequency sines. translateX/Y/Z + rotateZ use three's module
+  // scratch vectors, so this is allocation-free.
+  _applyTrauma(dt, spd) {
+    const isFpv = CAMERA_MODES[this.index] === 'FPV';
+    let rumble = 0;
+    if (isFpv && spd > 18) rumble = Math.min(1, (spd - 18) / 22) * 0.06;
+    if (this.trauma <= 0.0001 && rumble <= 0.0001) { this.trauma = 0; return; }
+    this._shakeT += dt;
+    const t = this._shakeT;
+    // three incommensurate octaves -> perlin-ish smooth noise in ~[-1,1]
+    const nx = Math.sin(t * 47.3) * 0.6 + Math.sin(t * 113.7 + 1.7) * 0.3 + Math.sin(t * 271.1 + 4.2) * 0.1;
+    const ny = Math.sin(t * 53.9 + 2.1) * 0.6 + Math.sin(t * 127.3 + 0.6) * 0.3 + Math.sin(t * 259.7 + 3.3) * 0.1;
+    const nr = Math.sin(t * 61.1 + 0.9) * 0.6 + Math.sin(t * 139.3 + 2.8) * 0.3 + Math.sin(t * 233.9 + 5.1) * 0.1;
+    const tr2 = this.trauma * this.trauma;
+    const posAmp = tr2 * 0.35 + rumble;
+    this.camera.translateX(nx * posAmp);
+    this.camera.translateY(ny * posAmp);
+    this.camera.translateZ(nr * posAmp * 0.4);
+    this.camera.rotateZ(tr2 * 1.2 * deg2rad * nr + rumble * 0.05 * deg2rad * nx);
+    // decay ~1.6/s (classic exponential trauma *= exp(-1.6*dt))
+    this.trauma = this.trauma * Math.exp(-1.6 * dt);
+    if (this.trauma < 0.0005) this.trauma = 0;
   }
 }

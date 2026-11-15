@@ -28,6 +28,7 @@ export class HUD {
     this._windVis = null; this._windHdg = null; this._windSpd = ''; this._windBars = -1;
     this._ghostOn = null; this._lastDelta = ''; this._lastDeltaCls = '';
     this._legendV = null; this._pauseV = null; this._springLbl = null;
+    if (this.el.bigVal) this.el.bigVal.addEventListener('animationend', () => this.el.bigVal.classList.remove('pop'));
   }
 
   setWind(o) {
@@ -173,6 +174,15 @@ export class HUD {
     f.classList.remove('on');
     void f.offsetWidth;
     f.classList.add('on');
+  }
+
+  // v0.9.0: gates counter number pops (scale + glow) each time a gate is passed
+  popGates() {
+    const el = this.el.bigVal;
+    if (!el) return;
+    el.classList.remove('pop');
+    void el.offsetWidth; // restart the animation even on rapid re-triggers
+    el.classList.add('pop');
   }
 
   toast(msg, ms = 1400) {

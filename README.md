@@ -102,6 +102,17 @@ alongside you with a per-gate delta readout (on/off in Settings).
   RC stick; Shift still drops it faster; gamepad/touch sticks unchanged
 - Desktop PAUSE pill above the battery panel (hidden on touch, where the touch
   PAUSE button takes over); invokes the same handler as the P key
+- Feel & juice: camera trauma shake (classic `trauma²` envelope, layered-sine
+  noise, position + roll offset applied to every view after the rig transform;
+  capped per impact, full crash kick) and FPV speed rumble above 18 m/s;
+  gamepad dual-rumble on impact/crash where the pad exposes
+  `vibrationActuator` (silently skipped otherwise)
+- Gate-pass feedback: the gate ring flashes (per-gate emissive spike + scale
+  pop decaying over ~0.5 s), a crisp two-tone up-chirp confirms the thread, and
+  the HUD counter pops
+- Auto-disarm on the deck (Betaflight-style): armed + landed + neutral sticks
+  for 3 s disarms through the normal disarm path with an `AUTO DISARM` toast;
+  any stick input cancels it, pause freezes the timer
 
 ## Layout
 

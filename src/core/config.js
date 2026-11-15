@@ -1,6 +1,6 @@
 // Central configuration and shared constants for QuadSim.
 
-export const VERSION = '0.8.0';
+export const VERSION = '0.9.0';
 
 export const CFG = {
   // World
@@ -12,6 +12,9 @@ export const CFG = {
 
   // Physics integration
   fixedStep: 1 / 240,
+
+  // Auto-disarm (Betaflight-style QoL, v0.9.0): armed + landed + neutral sticks
+  autoDisarmDelay: 3.0,
 
   // Environment
   dayNight: true,
