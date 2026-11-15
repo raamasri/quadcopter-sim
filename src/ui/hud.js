@@ -19,11 +19,13 @@ export class HUD {
       rpmFill: g('rpm-fill'),
       windInd: g('wind-ind'), windArrow: g('wind-arrow'), windSpeed: g('wind-speed'),
       windBars: root.querySelectorAll('#wind-bars i'),
-      qualityChip: g('quality-chip')
+      qualityChip: g('quality-chip'),
+      ghostRow: g('ghost-row'), ghostDelta: g('ghost-delta')
     };
     this._toastTimer = 0;
     this._lastBig = '';
     this._windVis = null; this._windHdg = null; this._windSpd = ''; this._windBars = -1;
+    this._ghostOn = null; this._lastDelta = ''; this._lastDeltaCls = '';
   }
 
   setWind(o) {
@@ -117,6 +119,25 @@ export class HUD {
   setView(name) { this.el.viewBadge.textContent = name; }
   setMission(name) { this.el.missionBadge.textContent = name; this.el.missionBadge.style.display = name ? '' : 'none'; }
   setQuality(name) { if (this.el.qualityChip) this.el.qualityChip.textContent = name; }
+
+  // TT ghost replay (v0.6.0): 'GHOST ON' chip + per-gate delta readout
+  setGhost(on) {
+    if (this._ghostOn === on) return;
+    this._ghostOn = on;
+    if (this.el.ghostRow) this.el.ghostRow.style.display = on ? '' : 'none';
+    document.body.classList.toggle('ghost-visible', on);
+    if (on) this.setGhostDelta(0);
+  }
+
+  setGhostDelta(d) {
+    const e = this.el;
+    if (!e.ghostDelta) return;
+    let txt, cls;
+    if (d == null || Math.abs(d) < 0.005) { txt = '±0.00'; cls = ''; }
+    else { txt = (d < 0 ? '-' : '+') + Math.abs(d).toFixed(2); cls = d < 0 ? 'good' : 'bad'; }
+    if (txt !== this._lastDelta) { this._lastDelta = txt; e.ghostDelta.textContent = txt; }
+    if (cls !== this._lastDeltaCls) { this._lastDeltaCls = cls; e.ghostDelta.className = 'ghost-delta' + (cls ? ' ' + cls : ''); }
+  }
 
   setPad(on) {
     this.el.padBadge.style.display = on ? '' : 'none';

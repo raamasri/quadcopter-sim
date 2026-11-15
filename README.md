@@ -25,7 +25,10 @@ npm run preview  # serve the production build
 | **Precision Hover** | 90 s inside a drifting zone under 1.6 m/s. | stability % |
 | **Freestyle** | 90 s judge session: flips, rolls, spins and gate links build combo. | best score |
 
-Best results persist in `localStorage` (`quadsim.records.v2`).
+Best results persist in `localStorage` (`quadsim.records.v2`). A new Time Trial
+lap record also stores the full run as a replay ghost (`quadsim.ghosts.v2`): the
+next TT launch on that airframe flies a translucent cyan ghost of your best lap
+alongside you with a per-gate delta readout (on/off in Settings).
 
 ## Flight model (`src/core/physics.js`)
 
@@ -68,6 +71,10 @@ Best results persist in `localStorage` (`quadsim.records.v2`).
 - HUD minimap: north-up top-down view of arena, gates, mission markers, trail and
   heading arrow; static world layer baked once to an offscreen canvas (re-baked on
   day/night only), overlay redraw capped at 20 Hz; on/off in Settings
+- TT ghost replays: best lap recorded at 20 Hz into a preallocated Float32 ring
+  buffer, pruned to ~10 Hz on save; translucent replay drone (mesh cached per
+  airframe, zero per-frame allocations) driven by the mission clock so pause
+  freezes it; per-gate delta chip; on/off in Settings
 
 ## Layout
 
@@ -86,6 +93,7 @@ src/
   scene/textures.js    procedural texture factory
   scene/droneVisual.js drone mesh, rotors, LEDs, motion trail
   game/missions.js     mission framework + 6 modes + records
+  game/ghost.js        TT ghost record/save + translucent replay playback
   ui/hud.js            telemetry, ADI, throttle, arm, objectives
   ui/minimap.js        north-up canvas minimap (baked static world + 20 Hz overlay)
   ui/touch.js          dual virtual sticks + action buttons (auto/on/off)

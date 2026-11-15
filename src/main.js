@@ -18,6 +18,7 @@ import { Minimap } from './ui/minimap.js';
 import { Screens, loadSettings, saveSettings } from './ui/screens.js';
 import { TouchControls } from './ui/touch.js';
 import { MISSION_DEFS, createMission, bestOf } from './game/missions.js';
+import { GhostRecorder, GhostReplay, ghostFor, saveGhost, computeGateTs, ghostInfo as readGhostInfo } from './game/ghost.js';
 
 const bootError = (err) => {
   const box = document.getElementById('boot-error');
@@ -91,9 +92,20 @@ try {
     prevPos: new THREE.Vector3(),
     pos: new THREE.Vector3(),
     maxSpeed: 0,
-    toast: (m, ms) => hud.toast(m, ms)
+    ghost: null,
+    toast: (m, ms) => hud.toast(m, ms),
+    // player gate N passed at elapsed (mission clock): report delta vs ghost baseline
+    ghostDelta: (idx, elapsed) => {
+      const gt = ctx.ghost && ctx.ghost.gateTs;
+      if (idx === 0 || !gt || idx < 0 || idx >= gt.length) { hud.setGhostDelta(0); return; }
+      hud.setGhostDelta(elapsed - gt[idx]);
+    }
   };
   parkOnPad();
+
+  const ghostRec = new GhostRecorder();
+  const ghostPlay = new GhostReplay(scene);
+  let ghostData = null;
 
   let state = 'menu'; // menu | play | pause | results
   let mission = null;
@@ -135,6 +147,13 @@ try {
     hud.setHoverPoint(model.hoverThrottle);
     respawnTimer = -1;
     state = 'play';
+    // TT ghost: load playback data for this drone, reset the recorder
+    ghostData = missionId === 'tt' ? ghostFor(spec.id) : null;
+    ctx.ghost = ghostData;
+    ghostRec.reset();
+    ghostPlay.attach(ghostData && settings.ghost === 'on' ? spec : null, ghostData);
+    hud.setGhost(missionId === 'tt' && !!ghostData && settings.ghost === 'on');
+    hud.setGhostDelta(0);
     screens.hide();
     helpOpen = true;
     hud.showHelp(true);
@@ -146,6 +165,10 @@ try {
     state = 'menu';
     if (mission) { world.clearCourse(); world.clearMarkers(); mission = null; }
     parkOnPad();
+    ghostPlay.detach();
+    ghostData = null;
+    ctx.ghost = null;
+    hud.setGhost(false);
     controls.throttle = 0;
     rig.setMode(2); // orbit for menu backdrop
     hud.setMission('');
@@ -178,6 +201,15 @@ try {
       if ('quality' in patch) { quality.setPreset(patch.quality); applyQuality(false); }
       if ('shadows' in patch) applyQuality(false);
       if ('touch' in patch) touch.refresh();
+      if ('ghost' in patch) {
+        if (patch.ghost === 'off') ghostPlay.detach();
+        else if (mission && mission.id === 'tt') {
+          ghostData = ghostFor(spec.id);
+          ctx.ghost = ghostData;
+          ghostPlay.attach(ghostData ? spec : null, ghostData);
+          if (ghostData) ghostPlay.seek(mission.time);
+        }
+      }
     }
   });
   screens.showMenu();
@@ -324,7 +356,18 @@ try {
       if (mission) {
         mission.time += dt;
         mission.update(dt);
-        if (mission.finished && mission.result && state === 'play') showResults(mission.result);
+        if (mission.id === 'tt' && model.armed && !mission.finished) ghostRec.tick(dt, mission.time, model);
+        if (mission.finished && mission.result && state === 'play') {
+          // only localStorage write in the ghost path: a new TT lap record
+          if (mission.id === 'tt' && mission.result.newBest) {
+            const frames = ghostRec.prune(); // 20 Hz -> ~10 Hz, 3 dp
+            if (frames.length >= 2) {
+              const ok = saveGhost(spec.id, { t: frames[frames.length - 1][0], frames, gateTs: computeGateTs(frames, world._gateDefs) });
+              if (ok) mission.result.newGhost = true;
+            }
+          }
+          showResults(mission.result);
+        }
       }
       audio.lowBatteryBeep(dt, model.armed ? model.battery : 1);
 
@@ -341,6 +384,13 @@ try {
 
     // visuals
     visual.update(dt, model, state === 'menu' ? { trailColor: [0.1, 0.5, 0.9] } : {});
+    // ghost playback follows the mission clock: pause freezes it (mission.time
+    // stops), a new run replays from t=0, results/menu hide it
+    if (mission && mission.id === 'tt' && ghostData && settings.ghost === 'on' && (state === 'play' || state === 'pause')) {
+      ghostPlay.tickTo(mission.time);
+    } else {
+      ghostPlay.hide();
+    }
     world.update(dt, model.pos, camera.position);
     rig.update(dt, { pos: model.pos, quat: model.quat, vel: model.vel });
 
@@ -363,6 +413,7 @@ try {
       big: state === 'play' && mission ? mission.bigStat : null
     });
     hud.setWind({ visible: state === 'play' && wind.strength > 0, heading: wind.headingDeg, speed: wind.baseSpeed });
+    hud.setGhost(!!(ghostData && settings.ghost === 'on' && mission && mission.id === 'tt' && (state === 'play' || state === 'pause')));
     minimap.tick(dt, model.pos.x, model.pos.z, t.heading, state, settings.minimap === 'off');
 
     renderer.toneMappingExposure = world.exposure;
@@ -394,6 +445,7 @@ try {
         windSpeed: +wind.baseSpeed.toFixed(2),
         quality: quality.resolved,
         touchEnabled: touch.enabled,
+        ghostActive: !!(ghostData && settings.ghost === 'on' && mission && mission.id === 'tt' && (state === 'play' || state === 'pause')),
         fps: Math.round(fps)
       };
     },
@@ -417,7 +469,8 @@ try {
     quit: () => quitToMenu(),
     wind(level) { wind.setStrength(level); settings.wind = level; saveSettings(settings); },
     windSpeed() { return { level: wind.level, strength: wind.strength, speed: +wind.baseSpeed.toFixed(2), heading: Math.round(wind.headingDeg) }; },
-    touch(on) { touch.force(on === undefined ? true : on); }
+    touch(on) { touch.force(on === undefined ? true : on); },
+    ghostInfo: () => readGhostInfo(spec.id)
   };
 } catch (err) {
   bootError(err);

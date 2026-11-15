@@ -9,7 +9,8 @@ function sharedTex() {
   return _sharedTex;
 }
 
-export function buildDrone(spec) {
+export function buildDrone(spec, opts = {}) {
+  const ghost = opts.ghost === true;
   const tex = sharedTex();
   const group = new THREE.Group();
   const { body, accent, led } = spec.color;
@@ -103,6 +104,27 @@ export function buildDrone(spec) {
     ledMesh.position.set(ax, -0.03, az + (isFront ? -0.03 : 0.03));
     group.add(ledMesh);
     ledMats.push(ledMat);
+  }
+
+  if (ghost) {
+    // translucent cyan-tinted replay double: no shadows, no depth writes,
+    // dim LEDs; rotors stay static (update() is never called on it)
+    const seen = new Set();
+    group.traverse((o) => {
+      o.castShadow = false;
+      if (!o.material || o.userData.blur) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const mm of mats) {
+        if (seen.has(mm)) continue;
+        seen.add(mm);
+        mm.transparent = true;
+        mm.opacity = 0.32;
+        mm.depthWrite = false;
+        if (mm.emissive) { mm.emissive.setHex(0x34e2ff); mm.emissiveIntensity = 0.28; }
+      }
+    });
+    for (const lm of ledMats) lm.emissiveIntensity = 0.5;
+    for (const r of rotors) r.userData.blur.visible = false;
   }
 
   group.scale.setScalar(spec.size);

@@ -7,7 +7,7 @@ const SETTINGS_KEY = 'quadcopter-sim.settings.v2';
 const LEGACY_SETTINGS_KEY = 'quad\u2026s.v2';
 
 export function loadSettings() {
-  const base = { volume: 0.7, sound: true, sensitivity: 0.55, shadows: true, night: false, wind: 'breezy', quality: 'auto', touch: 'auto', minimap: 'on', drone: 'scout', mission: 'free' };
+  const base = { volume: 0.7, sound: true, sensitivity: 0.55, shadows: true, night: false, wind: 'breezy', quality: 'auto', touch: 'auto', minimap: 'on', ghost: 'on', drone: 'scout', mission: 'free' };
   try { return Object.assign(base, JSON.parse(localStorage.getItem(SETTINGS_KEY) || localStorage.getItem(LEGACY_SETTINGS_KEY)) || {}); } catch { return base; }
 }
 
@@ -101,8 +101,12 @@ export class Screens {
               <option value="on">On</option>
               <option value="off">Off</option>
             </select></label>
+            <label class="set-row"><span>Ghost replay</span><select id="set-ghost" class="set-select">
+              <option value="on">On</option>
+              <option value="off">Off</option>
+            </select></label>
           </div>
-          <p class="set-note">Shadows OFF boosts FPS on weaker GPUs. Sensitivity blends linear ↔ expo response. Wind drives drift, gusts and the windsock. Quality Auto picks Low / Med / High from your hardware &mdash; running: <span id="q-resolved" class="q-resolved">—</span>. Touch Auto shows virtual sticks + buttons on touch devices only (On forces them; keyboard and gamepad keep working alongside). Minimap draws the arena, gates, mission markers and your trail at the top-left of the HUD. Renderer anti-aliasing applies at startup only.</p>
+          <p class="set-note">Shadows OFF boosts FPS on weaker GPUs. Sensitivity blends linear ↔ expo response. Wind drives drift, gusts and the windsock. Quality Auto picks Low / Med / High from your hardware &mdash; running: <span id="q-resolved" class="q-resolved">—</span>. Touch Auto shows virtual sticks + buttons on touch devices only (On forces them; keyboard and gamepad keep working alongside). Minimap draws the arena, gates, mission markers and your trail at the top-left of the HUD. Ghost plays your best Time Trial lap as a translucent cyan drone (your run is recorded automatically whenever it sets a new lap record). Renderer anti-aliasing applies at startup only.</p>
         </section>
 
         <section class="controls-cheat">
@@ -118,7 +122,7 @@ export class Screens {
         <div class="launch-bar">
           <button class="btn-launch" id="launch-btn">LAUNCH MISSION<em id="launch-sub"></em></button>
         </div>
-        <div class="menu-foot">QUADSIM PRO &middot; v${VERSION} &middot; wind · quality · touch · minimap</div>
+        <div class="menu-foot">QUADSIM PRO &middot; v${VERSION} &middot; wind · quality · touch · minimap · ghost</div>
       </div>
     </div>
 
@@ -193,6 +197,7 @@ export class Screens {
     bindSelect('#set-quality', 'quality');
     bindSelect('#set-touch', 'touch');
     bindSelect('#set-minimap', 'minimap');
+    bindSelect('#set-ghost', 'ghost');
   }
 
   _syncSettings() {
@@ -206,6 +211,7 @@ export class Screens {
     this._setSel('#set-quality', s.quality || 'auto');
     this._setSel('#set-touch', s.touch || 'auto');
     this._setSel('#set-minimap', s.minimap || 'on');
+    this._setSel('#set-ghost', s.ghost || 'on');
   }
   _setVal(sel, v) { this.root.querySelectorAll(sel).forEach((r) => { r.value = v; }); }
   _setChk(sel, v) { this.root.querySelectorAll(sel).forEach((r) => { r.checked = v; }); }
@@ -261,7 +267,9 @@ export class Screens {
   showResults(res) {
     this.el.resTitle.textContent = res.title;
     this.el.resTitle.className = res.win ? 'win' : 'lose';
-    this.el.resLines.innerHTML = (res.lines || []).map(([k, v]) => `<div class="res-row"><span>${k}</span><b>${v}</b></div>`).join('');
+    const lines = (res.lines || []).slice();
+    if (res.newGhost) lines.push(['REPLAY', 'NEW GHOST SAVED']);
+    this.el.resLines.innerHTML = lines.map(([k, v]) => `<div class="res-row${v === 'NEW GHOST SAVED' ? ' ghost-new' : ''}"><span>${k}</span><b>${v}</b></div>`).join('');
     let bestTxt = '';
     if (res.id && res.id !== 'free' && res.best != null) {
       bestTxt = res.newBest ? '★ NEW RECORD' : 'BEST ' + fmtBest(res.id, res.best);

@@ -102,6 +102,7 @@ class TimeTrial extends MissionBase {
       } else {
         this.c.audio.gate(this.world.gatesPassed);
         this.c.toast(`GATE ${this.world.gatesPassed} / ${this.world.gateCount} · ${fmtTime(this.elapsed)}`, 1100);
+        if (this.c.ghostDelta) this.c.ghostDelta(this.world.gatesPassed - 1, this.elapsed);
       }
     }
   }
