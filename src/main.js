@@ -14,6 +14,7 @@ import { World } from './scene/world.js';
 import { EnvReflections } from './scene/env.js';
 import { DroneVisual } from './scene/droneVisual.js';
 import { HUD } from './ui/hud.js';
+import { Minimap } from './ui/minimap.js';
 import { Screens, loadSettings, saveSettings } from './ui/screens.js';
 import { TouchControls } from './ui/touch.js';
 import { MISSION_DEFS, createMission, bestOf } from './game/missions.js';
@@ -69,8 +70,9 @@ try {
   wind.setStrength(settings.wind);
   world.setWindField(wind);
   const hud = new HUD(document);
+  const minimap = new Minimap(document.getElementById('minimap'), world);
   const env = new EnvReflections(renderer, scene, () => world.skyMat);
-  world.onNightChanged = () => env.schedule(quality.cfg.envPx); // debounced bake after transition settles
+  world.onNightChanged = () => { env.schedule(quality.cfg.envPx); minimap.rebuildStatic(); }; // debounced bake after transition settles
   const audio = new AudioEngine();
   audio.setVolume(settings.volume);
   audio.setEnabled(settings.sound);
@@ -117,6 +119,7 @@ try {
     model.spawn(world.padPos.x, 0.24, world.padPos.z, 0);
     visual.reset(model.pos);
     ctx.maxSpeed = 0;
+    minimap.reset();
   }
 
   function launch(missionId, droneId) {
@@ -360,6 +363,7 @@ try {
       big: state === 'play' && mission ? mission.bigStat : null
     });
     hud.setWind({ visible: state === 'play' && wind.strength > 0, heading: wind.headingDeg, speed: wind.baseSpeed });
+    minimap.tick(dt, model.pos.x, model.pos.z, t.heading, state, settings.minimap === 'off');
 
     renderer.toneMappingExposure = world.exposure;
     if (composer) composer.render(); else renderer.render(scene, camera);

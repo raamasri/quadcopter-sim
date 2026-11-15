@@ -65,6 +65,9 @@ Best results persist in `localStorage` (`quadsim.records.v2`).
 - Quality presets Low/Med/High + Auto (hardware-detected, runtime auto-degrade
   on sustained < 40 fps); persisted in settings
 - Audio is synthesized in WebAudio (motor bank, wind, gates, SFX) — zero assets
+- HUD minimap: north-up top-down view of arena, gates, mission markers, trail and
+  heading arrow; static world layer baked once to an offscreen canvas (re-baked on
+  day/night only), overlay redraw capped at 20 Hz; on/off in Settings
 
 ## Layout
 
@@ -84,5 +87,7 @@ src/
   scene/droneVisual.js drone mesh, rotors, LEDs, motion trail
   game/missions.js     mission framework + 6 modes + records
   ui/hud.js            telemetry, ADI, throttle, arm, objectives
+  ui/minimap.js        north-up canvas minimap (baked static world + 20 Hz overlay)
+  ui/touch.js          dual virtual sticks + action buttons (auto/on/off)
   ui/screens.js        menu, hangar, settings, pause, results
 ```
