@@ -453,7 +453,7 @@ body.touch-on .telemetry.left,
 body.touch-on .throttle { bottom: calc(var(--stick-h) + 14px + env(safe-area-inset-bottom, 0px)); }
 body.touch-on .minimap-wrap { width: 120px; height: 120px; }
 
-@media (orientation: portrait) {
+@media (orientation: portrait) and (max-width: 960px) {
   /* left column stacks under the wind cluster: minimap -> readout/arm ->
      battery, then telemetry + throttle side by side above the left stick;
      actions become a 2 x 2 grid above the right stick */
@@ -474,7 +474,7 @@ body.touch-on .minimap-wrap { width: 120px; height: 120px; }
   }
 }
 
-@media (orientation: landscape) {
+@media (orientation: landscape) and (max-width: 960px) {
   body.touch-on .telemetry.left { min-width: 128px; padding: 8px 10px; gap: 3px; }
   body.touch-on .telemetry.left .tele-row:last-child { display: none; }
   body.touch-on .throttle { left: 176px; }
@@ -498,10 +498,10 @@ body.touch-on .minimap-wrap { width: 120px; height: 120px; }
 /* short windows (landscape phones): minimap out of the left stack,
    top-center-left between the brand and the chip cluster */
 @media (orientation: landscape) and (max-height: 560px) {
-  .minimap-wrap { left: 244px; top: 46px; width: 120px; height: 120px; }
-  .throttle-track { height: 96px; }
-  .telemetry.left { bottom: 138px; }
-  .throttle { left: 16px; bottom: 16px; }
+  body.touch-on .minimap-wrap { left: 244px; top: 46px; width: 120px; height: 120px; }
+  body.touch-on .throttle-track { height: 96px; }
+  body.touch-on .telemetry.left { bottom: 138px; }
+  body.touch-on .throttle { left: 16px; bottom: 16px; }
 }
 
 /* narrow portrait desktop windows: compact AI readout docks bottom-left so the

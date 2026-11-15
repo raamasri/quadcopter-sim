@@ -39,3 +39,4 @@ Autonomous staged development. Baseline: v0.1.0 (`cfc2ba1`) — full simulator r
 2. Artificial-horizon dial is hidden on touch layouts (compact pitch/roll text replaces it) - confirm you are OK losing the dial on phones.
 3. Touch throttle is Mode-2 absolute hold: releasing the left stick drops throttle to zero (real radio behavior). Want a hover-hold assist toggle instead of/in addition to this?
 4. Vercel project is under raama-srivatsans-projects (personal) - rename the project or alias quadcopter-sim.vercel.app is already yours; change anything?
+- 2026-11-15: v0.7.1 hotfix - touch reflow media queries were applying on touch-capable DESKTOPS (phone-landscape button row at x=448 over the help panel, unscoped short-window rules). Scoped portrait/landscape touch reflows to max-width:960px and gated short-window block on body.touch-on. Verified 0 overlaps at 1280x800 touch-on + 390x844 regression.
