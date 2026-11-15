@@ -24,3 +24,4 @@ Autonomous staged development. Baseline: v0.1.0 (`cfc2ba1`) — full simulator r
 - 2026-11-15: v0.1.0 baseline on GitHub + Vercel prod. Started v0.2.0 wind system.
 
 - 2026-11-15: v0.2.0 wind system implemented, audited PASS (0 crit/major; minors fixed: dead CFG freq keys, unused local). Runtime: 60 FPS, 0 console errors, wind 1.8 m/s breezy verified via __SIM.
+- 2026-11-15: v0.2.0 deployed -> https://quadcopter-sim.vercel.app (production alias, guest GET 200, protection not blocking). CLI linked to raama-srivatsans-projects/quadcopter-sim.
