@@ -58,7 +58,7 @@ export class Controls {
 
     this._prevButtons = [];
     this._prevPad = null;
-    this.touch = null; // optional {pitch,roll,yaw,throttle}
+    this.touch = null; // reused axes ref from TouchControls: {pitch,roll,yaw,throttle,active}
   }
 
   _system(code) {
@@ -133,14 +133,21 @@ export class Controls {
     if (Math.abs(this.pad.roll) > Math.abs(roll)) roll = this.pad.roll;
     if (Math.abs(this.pad.yaw) > Math.abs(yaw)) yaw = this.pad.yaw;
 
-    // throttle: gamepad stick wins when connected; keys ramp otherwise
+    // touch sticks override while engaged (~0.5s hold after release); mouse look untouched
+    const tt = this.touch;
+    const touchOn = !!tt && tt.active;
+    if (touchOn) {
+      pitch = this._applyExpo(tt.pitch); roll = this._applyExpo(tt.roll); yaw = this._applyExpo(tt.yaw);
+    }
+
+    // throttle: gamepad stick wins when connected; keys ramp otherwise; touch wins last
     if (!this.throttleLock) {
       const keyRate = (k.has('Space') ? 0.7 : 0) - (k.has('ShiftLeft') || k.has('ShiftRight') ? 0.9 : 0);
       if (this.padConnected && this.pad.throttle !== null) {
         this.throttle = this._padActive ? this.pad.throttle : this.throttle;
       }
       if (keyRate !== 0) this.throttle = Math.max(0, Math.min(1, this.throttle + keyRate * dt));
-      if (this.touch && this.touch.throttleActive) this.throttle = this.touch.throttle;
+      if (touchOn) this.throttle = Math.max(0, Math.min(1, tt.throttle));
     }
 
     // Betaflight-style arming: zero throttle + full yaw held
@@ -162,6 +169,9 @@ export class Controls {
   }
 
   setThrottle(v) { this.throttle = Math.max(0, Math.min(1, v)); }
+
+  // Accepts the reused TouchControls.getAxes() object (no per-frame copies).
+  setTouchAxes(a) { this.touch = a; }
 
   dispose() {
     window.removeEventListener('keydown', this._onKeyDown);

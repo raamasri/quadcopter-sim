@@ -15,6 +15,7 @@ import { EnvReflections } from './scene/env.js';
 import { DroneVisual } from './scene/droneVisual.js';
 import { HUD } from './ui/hud.js';
 import { Screens, loadSettings, saveSettings } from './ui/screens.js';
+import { TouchControls } from './ui/touch.js';
 import { MISSION_DEFS, createMission, bestOf } from './game/missions.js';
 
 const bootError = (err) => {
@@ -173,6 +174,7 @@ try {
       if ('wind' in patch) wind.setStrength(patch.wind);
       if ('quality' in patch) { quality.setPreset(patch.quality); applyQuality(false); }
       if ('shadows' in patch) applyQuality(false);
+      if ('touch' in patch) touch.refresh();
     }
   });
   screens.showMenu();
@@ -254,6 +256,15 @@ try {
     anyFlightKey: () => { if (helpOpen && state === 'play') { helpOpen = false; hud.showHelp(false); } audio.start(); }
   };
 
+  // touch overlay (v0.4.0): buttons reuse the exact keyboard/gamepad handlers
+  const touch = new TouchControls(document, settings);
+  touch.cb = {
+    arm: () => controls.cb.toggleArm(),
+    cam: () => controls.cb.cycleView(),
+    mode: () => controls.cb.toggleMode(),
+    pause: () => controls.cb.togglePause()
+  };
+
   document.addEventListener('pointerdown', () => audio.start(), { once: true });
   document.addEventListener('pointerdown', () => {
     if (helpOpen && state === 'play') { helpOpen = false; hud.showHelp(false); }
@@ -269,6 +280,7 @@ try {
   // ---------- master loop ----------
   let fps = 60, fpsAcc = 0, fpsFrames = 0, fpsTimer = 0;
   let last = performance.now();
+  let touchState = state;
 
   function frame(now) {
     let dt = (now - last) / 1000;
@@ -279,6 +291,8 @@ try {
     if (fpsTimer >= 0.25) { fps = fpsFrames / fpsAcc; fpsAcc = 0; fpsFrames = 0; fpsTimer = 0; }
 
     wind.update(dt);
+    if (state !== touchState) { touchState = state; touch.setPlaying(state === 'play'); }
+    controls.setTouchAxes(touch.update(dt));
     const raw = controls.update(dt);
     const input = { ...raw, throttle: raw.throttle };
 
@@ -375,6 +389,7 @@ try {
         windLevel: wind.level,
         windSpeed: +wind.baseSpeed.toFixed(2),
         quality: quality.resolved,
+        touchEnabled: touch.enabled,
         fps: Math.round(fps)
       };
     },
@@ -397,7 +412,8 @@ try {
     restart: () => restart(),
     quit: () => quitToMenu(),
     wind(level) { wind.setStrength(level); settings.wind = level; saveSettings(settings); },
-    windSpeed() { return { level: wind.level, strength: wind.strength, speed: +wind.baseSpeed.toFixed(2), heading: Math.round(wind.headingDeg) }; }
+    windSpeed() { return { level: wind.level, strength: wind.strength, speed: +wind.baseSpeed.toFixed(2), heading: Math.round(wind.headingDeg) }; },
+    touch(on) { touch.force(on === undefined ? true : on); }
   };
 } catch (err) {
   bootError(err);

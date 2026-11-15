@@ -7,7 +7,7 @@ const SETTINGS_KEY = 'quadcopter-sim.settings.v2';
 const LEGACY_SETTINGS_KEY = 'quad\u2026s.v2';
 
 export function loadSettings() {
-  const base = { volume: 0.7, sound: true, sensitivity: 0.55, shadows: true, night: false, wind: 'breezy', quality: 'auto', drone: 'scout', mission: 'free' };
+  const base = { volume: 0.7, sound: true, sensitivity: 0.55, shadows: true, night: false, wind: 'breezy', quality: 'auto', touch: 'auto', drone: 'scout', mission: 'free' };
   try { return Object.assign(base, JSON.parse(localStorage.getItem(SETTINGS_KEY) || localStorage.getItem(LEGACY_SETTINGS_KEY)) || {}); } catch { return base; }
 }
 
@@ -92,8 +92,13 @@ export class Screens {
               <option value="med">Medium</option>
               <option value="high">High</option>
             </select></label>
+            <label class="set-row"><span>Touch controls</span><select id="set-touch" class="set-select">
+              <option value="auto">Auto</option>
+              <option value="on">On</option>
+              <option value="off">Off</option>
+            </select></label>
           </div>
-          <p class="set-note">Shadows OFF boosts FPS on weaker GPUs. Sensitivity blends linear ↔ expo response. Wind drives drift, gusts and the windsock. Quality Auto picks Low / Med / High from your hardware &mdash; running: <span id="q-resolved" class="q-resolved">—</span>. Renderer anti-aliasing applies at startup only.</p>
+          <p class="set-note">Shadows OFF boosts FPS on weaker GPUs. Sensitivity blends linear ↔ expo response. Wind drives drift, gusts and the windsock. Quality Auto picks Low / Med / High from your hardware &mdash; running: <span id="q-resolved" class="q-resolved">—</span>. Touch Auto shows virtual sticks + buttons on touch devices only (On forces them; keyboard and gamepad keep working alongside). Renderer anti-aliasing applies at startup only.</p>
         </section>
 
         <section class="controls-cheat">
@@ -109,7 +114,7 @@ export class Screens {
         <div class="launch-bar">
           <button class="btn-launch" id="launch-btn">LAUNCH MISSION<em id="launch-sub"></em></button>
         </div>
-        <div class="menu-foot">QUADSIM PRO &middot; v${VERSION} &middot; wind · atmosphere · reflections</div>
+        <div class="menu-foot">QUADSIM PRO &middot; v${VERSION} &middot; wind · quality · touch</div>
       </div>
     </div>
 
@@ -181,6 +186,7 @@ export class Screens {
     bindCheck('#set-night', 'night');
     bindSelect('#set-wind', 'wind');
     bindSelect('#set-quality', 'quality');
+    bindSelect('#set-touch', 'touch');
   }
 
   _syncSettings() {
@@ -192,6 +198,7 @@ export class Screens {
     this._setChk('#set-night', s.night);
     this._setSel('#set-wind', s.wind || 'breezy');
     this._setSel('#set-quality', s.quality || 'auto');
+    this._setSel('#set-touch', s.touch || 'auto');
   }
   _setVal(sel, v) { this.root.querySelectorAll(sel).forEach((r) => { r.value = v; }); }
   _setChk(sel, v) { this.root.querySelectorAll(sel).forEach((r) => { r.checked = v; }); }
