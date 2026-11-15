@@ -86,6 +86,7 @@ try {
   const rig = new CameraRig(camera);
   const controls = new Controls(canvas);
   controls.sensitivity = settings.sensitivity;
+  controls.spring = settings.throttleMode === 'spring';
 
   const ctx = {
     world, model, audio, settings,
@@ -114,6 +115,7 @@ try {
 
   hud.setView(rig.name);
   hud.setMission('');
+  hud.setThrottleSpring(settings.throttleMode === 'spring');
 
   // ---------- lifecycle ----------
   function rebuildDrone() {
@@ -196,6 +198,7 @@ try {
       if ('volume' in patch) { audio.start(); audio.setVolume(patch.volume); }
       if ('sound' in patch) audio.setEnabled(patch.sound);
       if ('sensitivity' in patch) controls.sensitivity = patch.sensitivity;
+      if ('throttleMode' in patch) { controls.spring = patch.throttleMode === 'spring'; hud.setThrottleSpring(patch.throttleMode === 'spring'); }
       if ('night' in patch) world.setNight(patch.night);
       if ('wind' in patch) wind.setStrength(patch.wind);
       if ('quality' in patch) { quality.setPreset(patch.quality); applyQuality(false); }
@@ -304,6 +307,11 @@ try {
   document.addEventListener('pointerdown', () => {
     if (helpOpen && state === 'play') { helpOpen = false; hud.showHelp(false); }
   });
+
+  // v0.8.0 desktop pause pill: reuses the exact P-key / Start handler (no canvas
+  // click handler exists; #hud is pointer-events:none, the button opts back in)
+  const pauseBtn = document.getElementById('pause-btn');
+  if (pauseBtn) pauseBtn.addEventListener('click', () => controls.cb.togglePause());
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -414,6 +422,8 @@ try {
     });
     hud.setWind({ visible: state === 'play' && wind.strength > 0, heading: wind.headingDeg, speed: wind.baseSpeed });
     hud.setGhost(!!(ghostData && settings.ghost === 'on' && mission && mission.id === 'tt' && (state === 'play' || state === 'pause')));
+    hud.setLegendVisible(state === 'play' && settings.legend !== 'off' ? 'on' : state === 'pause' && settings.legend !== 'off' ? 'dim' : 'off');
+    hud.setPauseVisible(state === 'play');
     minimap.tick(dt, model.pos.x, model.pos.z, t.heading, state, settings.minimap === 'off');
 
     renderer.toneMappingExposure = world.exposure;
@@ -446,6 +456,7 @@ try {
         quality: quality.resolved,
         touchEnabled: touch.enabled,
         ghostActive: !!(ghostData && settings.ghost === 'on' && mission && mission.id === 'tt' && (state === 'play' || state === 'pause')),
+        throttleMode: settings.throttleMode || 'hold',
         fps: Math.round(fps)
       };
     },

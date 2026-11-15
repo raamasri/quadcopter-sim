@@ -201,6 +201,44 @@ html, body {
 .battery-pct { font-size: 13px; font-weight: 700; color: #fff; min-width: 40px; text-align: right; }
 .battery-vol-line { margin-top: 5px; font-size: 9px; color: var(--muted); letter-spacing: 1px; }
 
+/* ---------- keyboard shortcut legend (v0.8.0) ---------- */
+/* top-right column under objective + bigstat (measured bottom 236 with the
+   mission sub-line): 248 keeps 12px clearance; hidden on touch, dim in pause */
+.key-legend {
+  position: absolute; right: 16px; top: 248px;
+  width: min(214px, 46vw);
+  display: none; grid-template-columns: 1fr 1fr; gap: 3px 10px;
+  padding: 8px 10px; border-radius: 12px;
+}
+.key-legend.on { display: grid; }
+.key-legend.dim { opacity: 0.45; }
+.kl { display: flex; align-items: center; gap: 4px; font-size: 9.5px; letter-spacing: 0.5px; color: var(--muted); white-space: nowrap; }
+.key-legend kbd { font-size: 8.5px; min-width: 0; padding: 0 4px; margin-right: 0; border-bottom-width: 2px; }
+.kl-thr { grid-column: 1 / -1; }
+body.touch-on .key-legend { display: none !important; }
+
+/* ---------- desktop pause button (v0.8.0) ---------- */
+/* pill above the battery panel (battery top ~ H-71): bottom 84 keeps ~13px gap */
+.pause-btn {
+  position: absolute; right: 16px; bottom: 84px;
+  display: none; align-items: center; gap: 8px;
+  min-height: 40px; padding: 0 16px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--stroke);
+  backdrop-filter: blur(var(--blur-soft)); color: var(--text);
+  font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 2px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  cursor: pointer; pointer-events: auto;
+  transition: border-color 0.1s, color 0.1s, transform 0.1s;
+}
+.pause-btn.on { display: flex; }
+.pause-btn:hover { border-color: var(--accent); color: #fff; }
+.pause-btn:active { transform: scale(0.96); }
+.pb-bars {
+  width: 10px; height: 12px; flex: none; border-radius: 1px;
+  background: linear-gradient(90deg, currentColor 0 34%, transparent 34% 66%, currentColor 66% 100%);
+}
+body.touch-on .pause-btn { display: none !important; }
+
 /* ---------- TT ghost replay (v0.6.0) ---------- */
 .ghost-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .ghost-chip {
@@ -391,6 +429,9 @@ kbd {
   .bigstat.right { top: 150px; }
   /* ghost chip row extends the objective card; keep the big stat clear of it */
   body.ghost-visible .bigstat.right { top: 196px; }
+  /* legend follows the shifted big stat: bottom ~246 (ghost ~292) -> 256 / 300 */
+  .key-legend { top: 256px; }
+  body.ghost-visible .key-legend { top: 300px; }
   .logo h1 { font-size: 24px; letter-spacing: 4px; }
 }
 
@@ -502,6 +543,31 @@ body.touch-on .minimap-wrap { width: 120px; height: 120px; }
   body.touch-on .throttle-track { height: 96px; }
   body.touch-on .telemetry.left { bottom: 138px; }
   body.touch-on .throttle { left: 16px; bottom: 16px; }
+}
+
+/* short windows (v0.8.0 non-touch): the right column can't hold bigstat +
+   5-row legend + pause pill + battery, so the legend compacts into one
+   wrapping line below the big stat (top 232 clears its ~221 bottom; width
+   38vw keeps the left edge past the reticle ring on ultra-narrow windows)
+   and hides entirely with the ghost-shifted big stat where the band between
+   bigstat and battery is < 55px */
+@media (max-height: 560px) {
+  .key-legend.on { display: flex; flex-wrap: wrap; gap: 1px 7px; width: min(220px, 38vw); top: 246px; padding: 2px 8px; }
+  .key-legend .kl { font-size: 8.5px; line-height: 1.4; }
+  .key-legend kbd { line-height: 1.15; }
+  body.ghost-visible .key-legend { display: none; }
+}
+/* audit v0.8.0: spring label widens the throttle row; below ~480px width the
+   compact wrap grows past the bigstat..battery band, so hide like the ghost case */
+@media (orientation: landscape) and (max-height: 560px) and (max-width: 479px) {
+  .key-legend.on { display: none; }
+}
+/* short landscape <=900w: telemetry lifts to 120, freeing the bottom-left
+   pocket; the pause pill moves there instead of stacking under the legend;
+   the compact legend drops with the shifted big stat (bottom ~246) */
+@media (orientation: landscape) and (max-height: 560px) and (max-width: 900px) {
+  .pause-btn { left: 16px; right: auto; bottom: 16px; }
+  .key-legend.on { top: 254px; }
 }
 
 /* narrow portrait desktop windows: compact AI readout docks bottom-left so the

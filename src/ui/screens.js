@@ -7,7 +7,7 @@ const SETTINGS_KEY = 'quadcopter-sim.settings.v2';
 const LEGACY_SETTINGS_KEY = 'quad\u2026s.v2';
 
 export function loadSettings() {
-  const base = { volume: 0.7, sound: true, sensitivity: 0.55, shadows: true, night: false, wind: 'breezy', quality: 'auto', touch: 'auto', minimap: 'on', ghost: 'on', drone: 'scout', mission: 'free' };
+  const base = { volume: 0.7, sound: true, sensitivity: 0.55, shadows: true, night: false, wind: 'breezy', quality: 'auto', touch: 'auto', minimap: 'on', ghost: 'on', throttleMode: 'hold', legend: 'on', drone: 'scout', mission: 'free' };
   try { return Object.assign(base, JSON.parse(localStorage.getItem(SETTINGS_KEY) || localStorage.getItem(LEGACY_SETTINGS_KEY)) || {}); } catch { return base; }
 }
 
@@ -105,15 +105,23 @@ export class Screens {
               <option value="on">On</option>
               <option value="off">Off</option>
             </select></label>
+            <label class="set-row"><span>Throttle mode</span><select id="set-thrmode" class="set-select">
+              <option value="hold">Hold</option>
+              <option value="spring">Spring</option>
+            </select></label>
+            <label class="set-row"><span>Hud key legend</span><select id="set-legend" class="set-select">
+              <option value="on">On</option>
+              <option value="off">Off</option>
+            </select></label>
           </div>
-          <p class="set-note">Shadows OFF boosts FPS on weaker GPUs. Sensitivity blends linear ↔ expo response. Wind drives drift, gusts and the windsock. Quality Auto picks Low / Med / High from your hardware &mdash; running: <span id="q-resolved" class="q-resolved">—</span>. Touch Auto shows virtual sticks + buttons on touch devices only (On forces them; keyboard and gamepad keep working alongside). Minimap draws the arena, gates, mission markers and your trail at the top-left of the HUD. Ghost plays your best Time Trial lap as a translucent cyan drone (your run is recorded automatically whenever it sets a new lap record). Renderer anti-aliasing applies at startup only.</p>
+          <p class="set-note">Shadows OFF boosts FPS on weaker GPUs. Sensitivity blends linear ↔ expo response. Wind drives drift, gusts and the windsock. Quality Auto picks Low / Med / High from your hardware &mdash; running: <span id="q-resolved" class="q-resolved">—</span>. Touch Auto shows virtual sticks + buttons on touch devices only (On forces them; keyboard and gamepad keep working alongside). Minimap draws the arena, gates, mission markers and your trail at the top-left of the HUD. Ghost plays your best Time Trial lap as a translucent cyan drone (your run is recorded automatically whenever it sets a new lap record). Throttle Hold keeps the last keyboard throttle value; Spring lets it fall back toward zero like a sprung RC stick when Space is released (Shift still drops faster). The HUD key legend lists the keyboard controls during flight (hidden while touch controls are on). Renderer anti-aliasing applies at startup only.</p>
         </section>
 
         <section class="controls-cheat">
           <h2 class="sec-title">Controls</h2>
           <div class="cheat-grid">
             <div><kbd>Throttle down + E</kbd> hold 0.7s to <b>ARM</b> · <kbd>Throttle down + Q</kbd> disarm · <kbd>G</kbd> quick arm</div>
-            <div><kbd>W/S</kbd> pitch · <kbd>A/D</kbd> roll · <kbd>Q/E</kbd> yaw · <kbd>Space</kbd>/<kbd>Shift</kbd> throttle</div>
+            <div><kbd>W/S</kbd> pitch · <kbd>A/D</kbd> roll · <kbd>Q/E</kbd> yaw · <kbd>Space</kbd>/<kbd>Shift</kbd> throttle (Spring mode: release falls to 0)</div>
             <div><kbd>T</kbd> angle/acro mode · <kbd>C</kbd> camera · <kbd>M</kbd> mouse look · <kbd>R</kbd> respawn</div>
             <div><kbd>P</kbd> pause · <kbd>L</kbd> day/night · <kbd>H</kbd> help · <kbd>F</kbd> fullscreen · Gamepad: LS throttle/yaw · RS pitch/roll · A arm · X mode</div>
           </div>
@@ -122,7 +130,7 @@ export class Screens {
         <div class="launch-bar">
           <button class="btn-launch" id="launch-btn">LAUNCH MISSION<em id="launch-sub"></em></button>
         </div>
-        <div class="menu-foot">QUADSIM PRO &middot; v${VERSION} &middot; wind · quality · touch · minimap · ghost</div>
+        <div class="menu-foot">QUADSIM PRO &middot; v${VERSION} &middot; wind · quality · touch · minimap · ghost · legend</div>
       </div>
     </div>
 
@@ -198,6 +206,8 @@ export class Screens {
     bindSelect('#set-touch', 'touch');
     bindSelect('#set-minimap', 'minimap');
     bindSelect('#set-ghost', 'ghost');
+    bindSelect('#set-thrmode', 'throttleMode');
+    bindSelect('#set-legend', 'legend');
   }
 
   _syncSettings() {
@@ -212,6 +222,8 @@ export class Screens {
     this._setSel('#set-touch', s.touch || 'auto');
     this._setSel('#set-minimap', s.minimap || 'on');
     this._setSel('#set-ghost', s.ghost || 'on');
+    this._setSel('#set-thrmode', s.throttleMode || 'hold');
+    this._setSel('#set-legend', s.legend || 'on');
   }
   _setVal(sel, v) { this.root.querySelectorAll(sel).forEach((r) => { r.value = v; }); }
   _setChk(sel, v) { this.root.querySelectorAll(sel).forEach((r) => { r.checked = v; }); }

@@ -20,12 +20,14 @@ export class HUD {
       windInd: g('wind-ind'), windArrow: g('wind-arrow'), windSpeed: g('wind-speed'),
       windBars: root.querySelectorAll('#wind-bars i'),
       qualityChip: g('quality-chip'),
-      ghostRow: g('ghost-row'), ghostDelta: g('ghost-delta')
+      ghostRow: g('ghost-row'), ghostDelta: g('ghost-delta'),
+      keyLegend: g('key-legend'), klThrLabel: g('kl-thr-label'), pauseBtn: g('pause-btn')
     };
     this._toastTimer = 0;
     this._lastBig = '';
     this._windVis = null; this._windHdg = null; this._windSpd = ''; this._windBars = -1;
     this._ghostOn = null; this._lastDelta = ''; this._lastDeltaCls = '';
+    this._legendV = null; this._pauseV = null; this._springLbl = null;
   }
 
   setWind(o) {
@@ -142,6 +144,28 @@ export class HUD {
   setPad(on) {
     this.el.padBadge.style.display = on ? '' : 'none';
     if (on) this.toast('GAMEPAD CONNECTED', 1400);
+  }
+
+  // v0.8.0: keyboard legend ('on' | 'dim' | 'off'), pause pill, spring label
+  setLegendVisible(v) {
+    if (v === this._legendV) return;
+    this._legendV = v;
+    const el = this.el.keyLegend;
+    if (!el) return;
+    el.classList.toggle('on', v !== 'off');
+    el.classList.toggle('dim', v === 'dim');
+  }
+
+  setPauseVisible(v) {
+    if (v === this._pauseV) return;
+    this._pauseV = v;
+    if (this.el.pauseBtn) this.el.pauseBtn.classList.toggle('on', v);
+  }
+
+  setThrottleSpring(v) {
+    if (v === this._springLbl) return;
+    this._springLbl = v;
+    if (this.el.klThrLabel) this.el.klThrLabel.textContent = v ? 'Throttle \u2191\u2193 spring' : 'Throttle';
   }
 
   flashGate() {

@@ -3,6 +3,7 @@
 
 const FLIGHT_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'Space', 'ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 const PREVENT = ['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'];
+const SPRING_FALL = 0.45; // v0.8.0 spring mode: throttle decay to 0 per second when no key held
 
 const dz = (v, z = 0.12) => (Math.abs(v) < z ? 0 : (v - Math.sign(v) * z) / (1 - z));
 const expo = (v, e) => v * (Math.abs(v) * e + (1 - e));
@@ -18,6 +19,7 @@ export class Controls {
 
     this.throttle = 0;
     this.throttleLock = false;
+    this.spring = false; // v0.8.0 sprung-stick throttle: released throttle decays to 0
     this.padConnected = false;
     this.padIndex = -1;
     this.pad = { pitch: 0, roll: 0, yaw: 0, throttle: null };
@@ -141,12 +143,15 @@ export class Controls {
     }
 
     // throttle: gamepad stick wins when connected; keys ramp otherwise; touch wins last
+    // spring mode (v0.8.0): no key held -> decay to 0; Shift fall keeps the -0.9/s keyRate.
+    // _padActive (not padConnected) so idle/phantom pads never block keyboard spring
     if (!this.throttleLock) {
       const keyRate = (k.has('Space') ? 0.7 : 0) - (k.has('ShiftLeft') || k.has('ShiftRight') ? 0.9 : 0);
       if (this.padConnected && this.pad.throttle !== null) {
         this.throttle = this._padActive ? this.pad.throttle : this.throttle;
       }
       if (keyRate !== 0) this.throttle = Math.max(0, Math.min(1, this.throttle + keyRate * dt));
+      else if (this.spring && !this._padActive && !touchOn && this.throttle > 0) this.throttle = Math.max(0, this.throttle - SPRING_FALL * dt);
       if (touchOn) this.throttle = Math.max(0, Math.min(1, tt.throttle));
     }
 

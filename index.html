@@ -100,6 +100,18 @@
       <div id="big-sub" class="big-sub"></div>
     </div>
 
+    <div class="panel key-legend" id="key-legend" aria-hidden="true">
+      <span class="kl"><kbd>W</kbd><kbd>S</kbd>Pitch</span>
+      <span class="kl"><kbd>A</kbd><kbd>D</kbd>Roll</span>
+      <span class="kl"><kbd>Q</kbd><kbd>E</kbd>Yaw</span>
+      <span class="kl"><kbd>G</kbd>Arm</span>
+      <span class="kl kl-thr"><kbd>Space</kbd><kbd>Shift</kbd><span id="kl-thr-label">Throttle</span></span>
+      <span class="kl"><kbd>T</kbd>Acro</span>
+      <span class="kl"><kbd>C</kbd>Camera</span>
+      <span class="kl"><kbd>P</kbd>Pause</span>
+      <span class="kl"><kbd>H</kbd>Help</span>
+    </div>
+
     <div class="panel battery right">
       <div class="battery-row">
         <div class="battery-track"><div id="battery-fill" class="battery-fill"></div></div>
@@ -107,6 +119,8 @@
       </div>
       <div class="battery-vol-line"><span id="battery-vol">16.8V</span> · 4S LIPO</div>
     </div>
+
+    <button id="pause-btn" class="pause-btn" type="button" aria-label="Pause"><i class="pb-bars" aria-hidden="true"></i>PAUSE</button>
 
     <div id="flash" class="flash"></div>
     <div id="toast" class="toast"></div>
@@ -124,6 +138,7 @@
               <li><kbd>A</kbd><kbd>D</kbd> roll left / right</li>
               <li><kbd>Q</kbd><kbd>E</kbd> yaw left / right</li>
               <li><kbd>Space</kbd> throttle up · <kbd>Shift</kbd> down</li>
+              <li>Spring throttle mode in Settings: releasing <kbd>Space</kbd> drops throttle to 0</li>
               <li><kbd>T</kbd> angle ↔ acro mode</li>
             </ul>
           </div>

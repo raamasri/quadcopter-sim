@@ -32,7 +32,7 @@ All state lives in `localStorage` — nothing leaves the device:
 |---|---|
 | `quadsim.records.v2` | best results per mode × airframe |
 | `quadsim.ghosts.v2` | Time Trial lap replay ghosts (one per airframe) |
-| `quadcopter-sim.settings.v2` | settings: drone, quality, wind, night, touch, minimap, ghost, audio |
+| `quadcopter-sim.settings.v2` | settings: drone, quality, wind, night, touch, minimap, ghost, throttle mode, legend, audio |
 
 ## Game modes
 
@@ -69,11 +69,11 @@ alongside you with a per-gate delta readout (on/off in Settings).
 | Disarm | hold throttle-down + **Q** | **A** |
 | Pitch / Roll | **W/S**, **A/D** or arrows | right stick |
 | Yaw | **Q/E** | left stick X |
-| Throttle | **Space** / **Shift** | left stick Y |
+| Throttle | **Space** / **Shift** (spring mode in Settings) | left stick Y |
 | Angle ↔ Acro | **T** | **X** |
 | Camera | **C**, digits **1–6** | **B** |
 | Mouse look FPV | **M** | **Y** |
-| Respawn / Pause | **R** / **P** | Select / Start |
+| Respawn / Pause | **R** / **P** or the on-screen PAUSE pill | Select / Start |
 | Day/night · Fullscreen · Help | **L** · **F** · **H** | — |
 
 ## Stack
@@ -95,6 +95,13 @@ alongside you with a per-gate delta readout (on/off in Settings).
   buffer, pruned to ~10 Hz on save; translucent replay drone (mesh cached per
   airframe, zero per-frame allocations) driven by the mission clock so pause
   freezes it; per-gate delta chip; on/off in Settings
+- HUD keyboard legend: compact key-cap panel under the mission stats, visible in
+  flight, dimmed in pause, hidden on touch layouts; on/off in Settings
+- Spring throttle mode (`Settings > Throttle mode`): with Spring the keyboard
+  throttle falls back toward 0 (~0.45/s) when Space is released, like a sprung
+  RC stick; Shift still drops it faster; gamepad/touch sticks unchanged
+- Desktop PAUSE pill above the battery panel (hidden on touch, where the touch
+  PAUSE button takes over); invokes the same handler as the P key
 
 ## Layout
 
