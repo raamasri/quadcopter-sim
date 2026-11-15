@@ -14,6 +14,26 @@ npm run build    # production bundle in dist/
 npm run preview  # serve the production build
 ```
 
+## Install (PWA)
+
+The built app is an installable, offline-first PWA (service worker `quadsim-v3`).
+
+- **Desktop (Chrome/Edge):** click the install icon in the address bar → QuadSim
+  opens in its own window (window-controls-overlay where supported).
+- **iOS Safari:** Share → *Add to Home Screen*; run fullscreen from the icon.
+- **Offline:** first load caches the app shell + hashed assets; after that the
+  simulator launches with no network. Navigations are network-first (fresh deploys
+  win when online), versioned `/assets/*` are cache-first forever. The service
+  worker is not registered on the `127.0.0.1`/`localhost` dev server.
+
+All state lives in `localStorage` — nothing leaves the device:
+
+| Key | Contents |
+|---|---|
+| `quadsim.records.v2` | best results per mode × airframe |
+| `quadsim.ghosts.v2` | Time Trial lap replay ghosts (one per airframe) |
+| `quadcopter-sim.settings.v2` | settings: drone, quality, wind, night, touch, minimap, ghost, audio |
+
 ## Game modes
 
 | Mode | Goal | Record |

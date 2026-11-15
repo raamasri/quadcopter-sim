@@ -2,13 +2,13 @@
 // settings; the resolved tier is runtime-only. Auto-degrade fires once per
 // session when sustained fps drops below 40 in play.
 
-export const TIERS = {
+const TIERS = {
   low: { shadows: false, mapSize: 1024, pixelRatio: 1.0, reflector: false, bloom: false, envPx: 0, fogDensity: 0.0045 },
   med: { shadows: true, mapSize: 2048, pixelRatio: 1.5, reflector: false, bloom: true, envPx: 128, fogDensity: 0.0035 },
   high: { shadows: true, mapSize: 4096, pixelRatio: 2.0, reflector: true, bloom: true, envPx: 256, fogDensity: 0.0032 }
 };
 
-export function detectTier() {
+function detectTier() {
   const mobile = /Android|iPhone|iPad|iPod|IEMobile|Mobile/i.test(navigator.userAgent || '');
   const cores = navigator.hardwareConcurrency || 2;
   const dpr = window.devicePixelRatio || 1;

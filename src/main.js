@@ -475,3 +475,16 @@ try {
 } catch (err) {
   bootError(err);
 }
+
+// PWA service worker (build output only). `import.meta.env.DEV` is statically
+// true on the dev server and false in production builds, so this block is dead
+// code there: dev never registers (dev assets are unbundled and would poison
+// the cache-first layer), preview and production do. Hostname must NOT gate
+// this: `vite preview` runs on localhost/127.0.0.1 and still needs the SW.
+// This module has a top-level await above, so `load` may already have fired
+// by the time execution resumes here — register immediately when complete.
+if (!import.meta.env.DEV && 'serviceWorker' in navigator) {
+  const registerSW = () => navigator.serviceWorker.register('/sw.js').catch(() => {});
+  if (document.readyState === 'complete') registerSW();
+  else window.addEventListener('load', registerSW);
+}

@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 
 const V = THREE.Vector3;
-export const CAMERA_MODES = ['CHASE', 'FPV', 'ORBIT', 'TOP', 'SIDE', 'CINEMATIC'];
+const CAMERA_MODES = ['CHASE', 'FPV', 'ORBIT', 'TOP', 'SIDE', 'CINEMATIC'];
 const damp = (a, b, l, dt) => b + (a - b) * Math.exp(-l * dt);
 
 export class CameraRig {
