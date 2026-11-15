@@ -1,11 +1,14 @@
 // Full-screen UI: main menu, hangar, settings, pause, results.
 
+import { VERSION } from '../core/config.js';
+
 const SETTINGS_KEY = 'quad…s.v2';
 
 export function loadSettings() {
-  const base = { volume: 0.7, sound: true, sensitivity: 0.55, shadows: true, night: false, drone: 'scout', mission: 'free' };
+  const base = { volume: 0.7, sound: true, sensitivity: 0.55, shadows: true, night: false, wind: 'breezy', drone: 'scout', mission: 'free' };
   try { return Object.assign(base, JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); } catch { return base; }
 }
+
 export function saveSettings(s) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch { /* ignore */ } }
 
 const fmtBest = (id, raw) => {
@@ -75,8 +78,14 @@ export class Screens {
             <label class="set-row toggle"><span>Sound</span><input type="checkbox" id="set-sound"></label>
             <label class="set-row toggle"><span>Shadows</span><input type="checkbox" id="set-shadows"></label>
             <label class="set-row toggle"><span>Night session</span><input type="checkbox" id="set-night"></label>
+            <label class="set-row"><span>Wind</span><select id="set-wind" class="set-select">
+              <option value="off">Off</option>
+              <option value="calm">Calm</option>
+              <option value="breezy">Breezy</option>
+              <option value="gusty">Gusty</option>
+            </select></label>
           </div>
-          <p class="set-note">Shadows OFF boosts FPS on weaker GPUs. Sensitivity blends linear ↔ expo response.</p>
+          <p class="set-note">Shadows OFF boosts FPS on weaker GPUs. Sensitivity blends linear ↔ expo response. Wind drives drift, gusts and the windsock.</p>
         </section>
 
         <section class="controls-cheat">
@@ -92,6 +101,7 @@ export class Screens {
         <div class="launch-bar">
           <button class="btn-launch" id="launch-btn">LAUNCH MISSION<em id="launch-sub"></em></button>
         </div>
+        <div class="menu-foot">QUADSIM PRO &middot; v${VERSION} &middot; wind &amp; atmosphere</div>
       </div>
     </div>
 
@@ -150,11 +160,18 @@ export class Screens {
         this.root.querySelectorAll(id).forEach((x) => { x.checked = r.checked; });
       }));
     };
+    const bindSelect = (id, key) => {
+      this.root.querySelectorAll(id).forEach((r) => r.addEventListener('change', () => {
+        this.o.settings[key] = r.value;
+        this.o.onChange({ [key]: r.value });
+      }));
+    };
     bindRange('#set-volume, #set-volume-p', 'volume');
     bindRange('#set-sens', 'sensitivity');
     bindCheck('#set-sound', 'sound');
     bindCheck('#set-shadows', 'shadows');
     bindCheck('#set-night', 'night');
+    bindSelect('#set-wind', 'wind');
   }
 
   _syncSettings() {
@@ -164,9 +181,11 @@ export class Screens {
     this._setChk('#set-sound', s.sound);
     this._setChk('#set-shadows', s.shadows);
     this._setChk('#set-night', s.night);
+    this._setSel('#set-wind', s.wind || 'breezy');
   }
   _setVal(sel, v) { this.root.querySelectorAll(sel).forEach((r) => { r.value = v; }); }
   _setChk(sel, v) { this.root.querySelectorAll(sel).forEach((r) => { r.checked = v; }); }
+  _setSel(sel, v) { this.root.querySelectorAll(sel).forEach((r) => { if ([].some.call(r.options, (o) => o.value === v)) r.value = v; else r.value = 'breezy'; }); }
 
   renderMissions() {
     const grid = this.el.missionGrid;

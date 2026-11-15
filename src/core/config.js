@@ -1,5 +1,7 @@
 // Central configuration and shared constants for QuadSim.
 
+export const VERSION = '0.2.0';
+
 export const CFG = {
   // World
   arenaR: 220,
@@ -12,7 +14,19 @@ export const CFG = {
   fixedStep: 1 / 240,
 
   // Environment
-  dayNight: true
+  dayNight: true,
+
+  // Wind
+  windLevels: { off: 0, calm: 0.22, breezy: 0.5, gusty: 0.95 },
+  windBaseSpeed: 4.5, // m/s at strength 1.0
+  windHeading: 35, // base heading (deg, compass: 0=N toward -Z)
+  windShear: 0.35, // wind weaker near ground: v *= pow(clamp(y/refH,0.15,1), shear)
+  windShearRefH: 12,
+  windGroundEffectH: 1.2, // downwash reduces wind coupling near the deck
+  windGustAmp: 0.55,
+  windFlutterAmp: 0.22,
+  windDirWobbleAmp: 26, // deg around base heading
+  windRipple: 0.14 // positional sine ripple (fraction of base speed)
 };
 
 // Shared math helpers

@@ -8,6 +8,7 @@ export class AudioEngine {
     this.volume = 0.7;
     this._started = false;
     this._lowBeepTimer = 0;
+    this._envWindLevel = 0;
   }
 
   start() {
@@ -38,6 +39,13 @@ export class AudioEngine {
     this._windSrc = ctx.createBufferSource(); this._windSrc.buffer = noiseBuf; this._windSrc.loop = true;
     this._windSrc.connect(this._windBP); this._windBP.connect(this._windGain); this._windGain.connect(this.master);
     this._windSrc.start();
+
+    // ambient wind: independent noise bed driven by relative airspeed + gusts
+    this._envWindGain = ctx.createGain(); this._envWindGain.gain.value = 0;
+    this._envWindBP = ctx.createBiquadFilter(); this._envWindBP.type = 'bandpass'; this._envWindBP.frequency.value = 620; this._envWindBP.Q.value = 0.5;
+    this._envWindSrc = ctx.createBufferSource(); this._envWindSrc.buffer = noiseBuf; this._envWindSrc.loop = true;
+    this._envWindSrc.connect(this._envWindBP); this._envWindBP.connect(this._envWindGain); this._envWindGain.connect(this.master);
+    this._envWindSrc.start();
     this._started = true;
   }
 
@@ -54,6 +62,16 @@ export class AudioEngine {
 
   setVolume(v) { this.volume = v; if (this.master) this.master.gain.value = this.enabled ? v : 0; }
   setEnabled(on) { this.enabled = on; if (this.master) this.master.gain.value = on ? this.volume : 0; }
+
+  setWind(relSpeed, windStrength) {
+    if (!this._started || !this.enabled || !this._envWindGain) return;
+    const rs = relSpeed > 0 ? relSpeed : 0;
+    const ws = windStrength > 0 ? windStrength : 0;
+    let target = rs * 0.012 + ws * rs * 0.02;
+    if (target > 0.35) target = 0.35;
+    this._envWindLevel += (target - this._envWindLevel) * 0.12;
+    this._envWindGain.gain.value = this._envWindLevel;
+  }
 
   frame(dt, rpm, airspeed, armed) {
     if (!this._started || !this.enabled) return;

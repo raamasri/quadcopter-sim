@@ -2,7 +2,7 @@
 // mission course gates, cargo/hover/beacon markers, day/night and colliders.
 
 import * as THREE from 'three';
-import { CFG, clamp, smoothstep } from '../core/config.js';
+import { CFG, clamp, lerp, smoothstep, deg2rad } from '../core/config.js';
 import {
   grassTextures, asphaltTextures, concreteTextures, metalTexture,
   facadeTexture, helipadTexture, runwayTexture
@@ -37,6 +37,10 @@ export class World {
     this._nextGate = 0;
     this.gatesPassed = 0;
     this._markers = [];
+    this._roofSpots = [];
+    this._wind = null;
+    this._windT = 0;
+    this._flags = [];
 
     this._buildSky();
     this._buildLights();
@@ -44,7 +48,10 @@ export class World {
     this._buildPerimeter();
     this._buildRunway();
     this._scatter();
+    this._buildWindDressing();
   }
+
+  setWindField(windField) { this._wind = windField || null; }
 
   _buildSky() {
     this.skyMat = new THREE.ShaderMaterial({
@@ -178,6 +185,7 @@ export class World {
       this._facadeMats.push(mat);
       const c = Math.cos(ry), si = Math.sin(ry);
       this.colliders.push({ t: 'b', x, y: h / 2, z, hx: w / 2, hy: h / 2, hz: d / 2, cos: c, sin: si });
+      if (bp.inside) this._roofSpots.push({ x, z, h });
     }
 
     // trees + rocks inside arena
@@ -209,6 +217,123 @@ export class World {
         rock.scale.set(s, s * 0.7, s); rock.position.set(x, 0.3 * s, z); rock.rotation.set(n(), n(), n());
         rock.castShadow = true; rock.receiveShadow = true; this.scene.add(rock);
       }
+    }
+  }
+
+  // ---- wind-reactive dressing: windsock, roof flags, dust motes ----
+  _buildWindDressing() {
+    const metalPole = new THREE.MeshStandardMaterial({ color: 0xc4ccd6, roughness: 0.45, metalness: 0.7 });
+    const n = rng(2027);
+
+    // windsock ~6 m beside the pad
+    const sx = this.padPos.x + 5, sz = this.padPos.z - 4;
+    const poleH = 5;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, poleH, 8), metalPole);
+    pole.position.set(sx, poleH / 2, sz); pole.castShadow = true; this.scene.add(pole);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 8), metalPole);
+    cap.position.set(sx, poleH, sz); this.scene.add(cap);
+
+    const pivot = new THREE.Group(); pivot.position.set(sx, poleH - 0.08, sz); this.scene.add(pivot);
+    const tilt = new THREE.Group(); pivot.add(tilt);
+    const bands = [[0.40, 0.30, 0.0, 0.7, 0xff5320], [0.30, 0.20, 0.7, 1.5, 0xff8a3a], [0.20, 0.09, 1.5, 2.2, 0xff3b1a]];
+    for (const [r0, r1, x0, x1, col] of bands) {
+      const geo = new THREE.CylinderGeometry(r1, r0, x1 - x0, 12, 1, true);
+      geo.rotateZ(-Math.PI / 2);
+      const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: col, side: THREE.DoubleSide, roughness: 0.85, metalness: 0, flatShading: true }));
+      mesh.position.x = (x0 + x1) / 2; mesh.castShadow = true; tilt.add(mesh);
+    }
+    this._sockPivot = pivot;
+    this._sockTilt = tilt;
+
+    // two flag banners on rooftops near the arena centre
+    const spots = this._roofSpots;
+    if (spots.length) {
+      const chosen = [spots[0]];
+      const alt = spots.find((s) => Math.hypot(s.x - spots[0].x, s.z - spots[0].z) > 45) || spots[1];
+      if (alt && alt !== spots[0]) chosen.push(alt);
+      for (const sp of chosen) this._buildFlag(sp, metalPole, n);
+    }
+
+    // dust motes in a 60 m box that follows the camera
+    const count = 500;
+    const arr = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      arr[i * 3] = (n() * 2 - 1) * 30;
+      arr[i * 3 + 1] = n() * 30;
+      arr[i * 3 + 2] = (n() * 2 - 1) * 30;
+    }
+    const dg = new THREE.BufferGeometry();
+    dg.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    const dm = new THREE.PointsMaterial({
+      color: 0xffe6c8, size: 0.075, transparent: true, opacity: 0.22,
+      depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true
+    });
+    const pts = new THREE.Points(dg, dm); pts.frustumCulled = false; this.scene.add(pts);
+    this._dust = pts; this._dustArr = arr; this._dustCount = count; this._dustMat = dm;
+  }
+
+  _buildFlag(sp, poleMat, n) {
+    const group = new THREE.Group(); group.position.set(sp.x, sp.h, sp.z);
+    const poleH = 2.7;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, poleH, 6), poleMat);
+    pole.position.y = poleH / 2; pole.castShadow = true; group.add(pole);
+    const banner = new THREE.Group(); banner.position.y = poleH - 0.2; group.add(banner);
+    const W = 2.4, H = 1.3;
+    const geo = new THREE.PlaneGeometry(W, H, 16, 12);
+    geo.translate(W / 2, 0, 0);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xff7a2a, side: THREE.DoubleSide, roughness: 0.9, metalness: 0 });
+    const mesh = new THREE.Mesh(geo, mat); mesh.castShadow = true; banner.add(mesh);
+    this.scene.add(group);
+    this._flags.push({ banner, geo, base: Float32Array.from(geo.attributes.position.array), phase: n() * 6.28, w: W });
+  }
+
+  _updateWindDressing(dt, dronePos, camPos) {
+    this._windT += dt;
+    const t = this._windT;
+    const wf = this._wind;
+    const bSpeed = wf ? wf.baseSpeed : 0;
+    const headingRad = (wf ? wf.headingDeg : 0) * deg2rad;
+    const dirX = wf ? wf.baseVel.x : 0;
+    const dirZ = wf ? wf.baseVel.z : 0;
+    const wf01 = clamp(bSpeed / 6, 0, 1);
+    const yaw = Math.PI / 2 - headingRad;
+
+    if (this._sockPivot) {
+      this._sockPivot.rotation.y = yaw;
+      const droop = lerp(deg2rad * 70, deg2rad * 5, wf01);
+      const flut = Math.sin(t * 9) * 0.12 * wf01 + Math.sin(t * 3.3) * 0.05 * wf01;
+      this._sockTilt.rotation.z = -droop + flut;
+      this._sockTilt.rotation.x = Math.sin(t * 7 + 1) * 0.1 * wf01;
+    }
+
+    for (const fl of this._flags) {
+      fl.banner.rotation.y = yaw;
+      const pos = fl.geo.attributes.position;
+      const a = pos.array, base = fl.base;
+      const amp = 0.05 + 0.18 * wf01;
+      const k = 3, f = 3 + 5 * wf01;
+      for (let i = 0; i < a.length; i += 3) {
+        const x = base[i], y = base[i + 1];
+        a[i + 2] = Math.sin(x * k + t * f + fl.phase) * amp * (x / fl.w) * (1 - (Math.abs(y) / (1.3 * 0.5)) * 0.3);
+      }
+      pos.needsUpdate = true;
+    }
+
+    if (this._dust) {
+      const arr = this._dustArr, c = this._dustCount;
+      for (let i = 0; i < c; i++) {
+        const ix = i * 3;
+        arr[ix] += dirX * dt;
+        arr[ix + 1] += Math.sin(t * 1.3 + i) * 0.04 * dt;
+        arr[ix + 2] += dirZ * dt;
+        if (arr[ix] > 30) arr[ix] -= 60; else if (arr[ix] < -30) arr[ix] += 60;
+        if (arr[ix + 2] > 30) arr[ix + 2] -= 60; else if (arr[ix + 2] < -30) arr[ix + 2] += 60;
+        if (arr[ix + 1] > 30) arr[ix + 1] -= 30; else if (arr[ix + 1] < 0) arr[ix + 1] += 30;
+      }
+      this._dust.geometry.attributes.position.needsUpdate = true;
+      const anchor = camPos || dronePos;
+      if (anchor) this._dust.position.set(anchor.x, 0, anchor.z);
+      this._dustMat.opacity = lerp(0.22, 0.09, this._nightMix);
     }
   }
 
@@ -334,7 +459,7 @@ export class World {
   // ---- day/night + per-frame ----
   setNight(v) { this.night = !!v; }
 
-  update(dt, dronePos) {
+  update(dt, dronePos, camPos) {
     this._t += dt;
     const target = this.night ? 1 : 0;
     this._nightMix += (target - this._nightMix) * Math.min(1, dt * 2.2);
@@ -382,5 +507,7 @@ export class World {
       mk.ring.material.emissiveIntensity = mk.active ? glowP : 0.2;
       mk.beam.material.opacity = mk.active ? 0.09 + Math.sin(this._t * 3) * 0.03 : 0.02;
     }
+
+    this._updateWindDressing(dt, dronePos, camPos);
   }
 }

@@ -95,6 +95,24 @@ html, body {
 .tele-unit { font-size: 10px; color: var(--muted); font-weight: 500; }
 .cardinal { font-size: 12px; color: var(--accent); margin-left: 6px; }
 
+/* ---------- wind indicator ---------- */
+.wind-ind {
+  position: absolute; left: 16px; top: 62px;
+  display: none; align-items: center; gap: 9px;
+  background: var(--panel); border: 1px solid var(--stroke); border-radius: 12px;
+  padding: 8px 12px; backdrop-filter: blur(10px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+}
+.wind-ind.on { display: flex; }
+.wind-arrow { width: 22px; height: 22px; fill: var(--accent); filter: drop-shadow(0 0 6px rgba(52, 226, 255, 0.6)); transform-origin: 50% 50%; transition: transform 0.15s linear; }
+.wind-bars { display: flex; gap: 3px; align-items: flex-end; height: 18px; }
+.wind-bars i { width: 5px; height: 6px; border-radius: 2px; background: rgba(255, 255, 255, 0.16); transition: background 0.2s, box-shadow 0.2s; }
+.wind-bars i:nth-child(2) { height: 11px; }
+.wind-bars i:nth-child(3) { height: 16px; }
+.wind-bars i.lit { background: var(--accent); box-shadow: 0 0 7px var(--accent); }
+.wind-speed { font-size: 15px; font-weight: 700; color: #fff; min-width: 30px; text-align: right; font-variant-numeric: tabular-nums; }
+.wind-unit { font-size: 9px; color: var(--muted); }
+
 /* ---------- throttle ---------- */
 .throttle { position: absolute; left: 208px; bottom: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .throttle-track { width: 14px; height: 150px; background: rgba(0, 0, 0, 0.5); border: 1px solid var(--stroke); border-radius: 10px; position: relative; overflow: hidden; }
@@ -272,6 +290,8 @@ kbd {
 .set-row input[type='range'] { width: 130px; accent-color: var(--accent); }
 .set-row input[type='checkbox'] { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
 .set-note { color: var(--muted); font-size: 11px; margin-top: 10px; }
+.set-row .set-select { background: #0e1828; color: var(--text); border: 1px solid var(--stroke); border-radius: 8px; padding: 6px 10px; font-family: var(--mono); font-size: 12px; letter-spacing: 1px; accent-color: var(--accent); cursor: pointer; }
+.menu-foot { margin-top: 26px; text-align: center; color: var(--muted); font-size: 11px; letter-spacing: 2px; font-family: var(--mono); }
 
 .controls-cheat .cheat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; font-size: 12px; color: var(--muted); line-height: 2; }
 .controls-cheat b { color: var(--good); }

@@ -6,7 +6,7 @@
 // X-frame mixer with spin-up lag and control-authority saturation.
 
 import * as THREE from 'three';
-import { CFG, clamp, smoothstep, rad2deg } from './config.js';
+import { CFG, clamp, lerp, smoothstep, rad2deg } from './config.js';
 
 const V = THREE.Vector3;
 const AXIS_X = new V(1, 0, 0);
@@ -14,13 +14,15 @@ const AXIS_Y = new V(0, 1, 0);
 const AXIS_Z = new V(0, 0, 1);
 
 export class FlightModel {
-  constructor(spec) {
+  constructor(spec, windField) {
     this.spec = spec;
     this.maxThrust = spec.mass * 9.81 * spec.tw;
     this.weight = spec.mass * 9.81;
     this.hoverThrottle = 1 / spec.tw;
     this.R = 0.22 * spec.size;
     this.drainMult = 110 / spec.batteryWh;
+
+    this.wind = windField || null;
 
     this.pos = new V();
     this.vel = new V();
@@ -62,7 +64,12 @@ export class FlightModel {
     this._up = new V();
 
     this._rateCmd = new V();
+    this._airVel = new V();
+    this._airL = new V();
+    this._rel = new V();
   }
+
+  setWind(windField) { this.wind = windField || null; }
 
   spawn(x = 0, y = 0.5, z = 6, yaw = 0) {
     this.pos.set(x, y, z);
@@ -106,10 +113,12 @@ export class FlightModel {
       return;
     }
     const h = CFG.fixedStep;
+    if (this.wind && this.wind.strength > 0) this.wind.sample(this.pos.x, this.pos.y, this.pos.z, this._airVel);
+    else this._airVel.set(0, 0, 0);
     let acc = dt;
     let guard = 0;
     while (acc > 1e-6 && guard < 60) {
-      this._substep(Math.min(h, acc), input, world);
+      this._substep(Math.min(h, acc), input, world, this._airVel);
       acc -= h;
       guard++;
     }
@@ -131,7 +140,7 @@ export class FlightModel {
     return sag * cutoff;
   }
 
-  _substep(s, input, world) {
+  _substep(s, input, world, airVel) {
     const spec = this.spec;
 
     // --- heading ---
@@ -202,9 +211,18 @@ export class FlightModel {
     this._force.copy(this._lift);
     this._force.y -= spec.mass * 9.81;
 
-    // aerodynamic drag opposes velocity
-    const sp = this.vel.length();
-    this._force.addScaledVector(this.vel, -(spec.dragLin + spec.dragQuad * sp));
+    // aerodynamic drag opposes motion relative to the air (wind-aware). Near
+    // the deck the rotor downwash dominates, so wind coupling is damped toward
+    // 25 % at the surface. With no wind this is identical to plain drag.
+    const air = airVel || this._airVel;
+    let wg = 1;
+    const geH = CFG.windGroundEffectH ?? 1.2;
+    const alt = this.pos.y - CFG.groundClear;
+    if (alt < geH) wg = lerp(0.25, 1, clamp(alt / geH, 0, 1));
+    this._airL.copy(air).multiplyScalar(wg);
+    this._rel.copy(this.vel).sub(this._airL);
+    const sp = this._rel.length();
+    this._force.addScaledVector(this._rel, -(spec.dragLin + spec.dragQuad * sp));
 
     this._acc.copy(this._force).multiplyScalar(1 / spec.mass);
     this.gLoad = this._lift.y / this.weight;

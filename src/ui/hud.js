@@ -16,10 +16,32 @@ export class HUD {
       missionBadge: g('mission-badge'), objText: g('obj-text'), progFill: g('prog-fill'),
       bigVal: g('big-val'), bigLabel: g('big-label'), bigSub: g('big-sub'),
       armBadge: g('arm-badge'), armBar: g('arm-bar'), padBadge: g('pad-badge'),
-      rpmFill: g('rpm-fill')
+      rpmFill: g('rpm-fill'),
+      windInd: g('wind-ind'), windArrow: g('wind-arrow'), windSpeed: g('wind-speed'),
+      windBars: root.querySelectorAll('#wind-bars i')
     };
     this._toastTimer = 0;
     this._lastBig = '';
+    this._windVis = null; this._windHdg = null; this._windSpd = ''; this._windBars = -1;
+  }
+
+  setWind(o) {
+    const e = this.el;
+    if (!e.windInd) return;
+    const vis = !!o.visible;
+    if (this._windVis !== vis) { this._windVis = vis; e.windInd.classList.toggle('on', vis); }
+    if (!vis) return;
+    const hdg = Math.round(o.heading || 0) % 360;
+    if (this._windHdg !== hdg) { this._windHdg = hdg; e.windArrow.style.transform = `rotate(${hdg}deg)`; }
+    const sp = (o.speed || 0).toFixed(1);
+    if (this._windSpd !== sp) { this._windSpd = sp; e.windSpeed.textContent = sp; }
+    const s = o.speed || 0;
+    const bars = s <= 0.05 ? 0 : s < 1.6 ? 1 : s < 3.4 ? 2 : 3;
+    if (this._windBars !== bars) {
+      this._windBars = bars;
+      const list = e.windBars;
+      for (let i = 0; i < list.length; i++) list[i].classList.toggle('lit', i < bars);
+    }
   }
 
   setHoverPoint(pct) {

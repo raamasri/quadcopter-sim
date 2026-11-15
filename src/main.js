@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { Controls } from './core/input.js';
 import { CameraRig } from './core/cameraRig.js';
 import { FlightModel } from './core/physics.js';
+import { WindField } from './core/wind.js';
+import { CFG } from './core/config.js';
 import { AudioEngine } from './core/audio.js';
 import { droneById, DRONES } from './core/drones.js';
 import { World } from './scene/world.js';
@@ -54,13 +56,16 @@ try {
   const settings = loadSettings();
   const world = new World(scene);
   world.setNight(settings.night);
+  const wind = new WindField(CFG);
+  wind.setStrength(settings.wind);
+  world.setWindField(wind);
   const hud = new HUD(document);
   const audio = new AudioEngine();
   audio.setVolume(settings.volume);
   audio.setEnabled(settings.sound);
 
   let spec = droneById(settings.drone);
-  let model = new FlightModel(spec);
+  let model = new FlightModel(spec, wind);
   let visual = new DroneVisual(scene, spec);
 
   const rig = new CameraRig(camera);
@@ -89,7 +94,7 @@ try {
     scene.remove(visual.mesh); scene.remove(visual.trail);
     visual.dispose(scene);
     visual = new DroneVisual(scene, spec);
-    model = new FlightModel(spec);
+    model = new FlightModel(spec, wind);
     ctx.model = model;
     hud.setHoverPoint(model.hoverThrottle);
     parkOnPad();
@@ -153,6 +158,7 @@ try {
       if ('sound' in patch) audio.setEnabled(patch.sound);
       if ('sensitivity' in patch) controls.sensitivity = patch.sensitivity;
       if ('night' in patch) world.setNight(patch.night);
+      if ('wind' in patch) wind.setStrength(patch.wind);
       if ('shadows' in patch) {
         renderer.shadowMap.enabled = patch.shadows;
         scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; }); });
@@ -231,6 +237,7 @@ try {
     fpsAcc += dt; fpsFrames++; fpsTimer += dt;
     if (fpsTimer >= 0.25) { fps = fpsFrames / fpsAcc; fpsAcc = 0; fpsFrames = 0; fpsTimer = 0; }
 
+    wind.update(dt);
     const raw = controls.update(dt);
     const input = { ...raw, throttle: raw.throttle };
 
@@ -276,12 +283,16 @@ try {
 
     // visuals
     visual.update(dt, model, state === 'menu' ? { trailColor: [0.1, 0.5, 0.9] } : {});
-    world.update(dt, model.pos);
+    world.update(dt, model.pos, camera.position);
     rig.update(dt, { pos: model.pos, quat: model.quat, vel: model.vel });
 
     // audio frame
+    const rvx = model.vel.x - wind.baseVel.x;
+    const rvz = model.vel.z - wind.baseVel.z;
+    const relSpeed = Math.hypot(rvx, model.vel.y, rvz);
     if (state === 'play') audio.frame(dt, model.rpmNorm, model.vel.length(), model.armed);
     else audio.frame(dt, 0, 0, false);
+    audio.setWind(relSpeed, wind.strength);
 
     // HUD
     const t = model.telemetry();
@@ -293,6 +304,7 @@ try {
       progressFrac: state === 'play' && mission ? mission.progressFrac : 0,
       big: state === 'play' && mission ? mission.bigStat : null
     });
+    hud.setWind({ visible: state === 'play' && wind.strength > 0, heading: wind.headingDeg, speed: wind.baseSpeed });
 
     if (composer) composer.render(); else renderer.render(scene, camera);
     requestAnimationFrame(frame);
@@ -314,6 +326,8 @@ try {
         gates: world.gatesPassed,
         view: rig.name,
         night: world.night,
+        windLevel: wind.level,
+        windSpeed: +wind.baseSpeed.toFixed(2),
         fps: Math.round(fps)
       };
     },
@@ -334,7 +348,9 @@ try {
     tp(x, y, z, vx = 0, vy = 0, vz = 0) { model.pos.set(x, y, z); model.vel.set(vx, vy, vz); },
     gates: () => world._gateDefs.map((g) => ({ pos: g.pos.toArray(), passed: g.passed })),
     restart: () => restart(),
-    quit: () => quitToMenu()
+    quit: () => quitToMenu(),
+    wind(level) { wind.setStrength(level); settings.wind = level; saveSettings(settings); },
+    windSpeed() { return { level: wind.level, strength: wind.strength, speed: +wind.baseSpeed.toFixed(2), heading: Math.round(wind.headingDeg) }; }
   };
 } catch (err) {
   bootError(err);
