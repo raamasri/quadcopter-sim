@@ -1,0 +1,118 @@
+// DOM HUD: telemetry, attitude indicator, throttle, battery, mission panel,
+// arm indicator, toasts.
+
+const CARDINALS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+
+export class HUD {
+  constructor(root = document) {
+    const g = (id) => root.getElementById(id);
+    this.el = {
+      spd: g('spd'), alt: g('alt'), vspeed: g('vspeed'), hdg: g('hdg'), hdgCard: g('hdg-card'),
+      throttleFill: g('throttle-fill'), throttlePct: g('throttle-pct'), throttleHover: g('throttle-hover'),
+      aiHorizon: g('ai-horizon'), pitchOut: g('pitch-out'), rollOut: g('roll-out'),
+      batteryFill: g('battery-fill'), batteryPct: g('battery-pct'), batteryVol: g('battery-vol'),
+      fps: g('fps'), viewBadge: g('view-badge'), flightMode: g('flight-mode'), modeDot: g('mode-dot'),
+      flash: g('flash'), toast: g('toast'), help: g('help'), hud: g('hud'),
+      missionBadge: g('mission-badge'), objText: g('obj-text'), progFill: g('prog-fill'),
+      bigVal: g('big-val'), bigLabel: g('big-label'), bigSub: g('big-sub'),
+      armBadge: g('arm-badge'), armBar: g('arm-bar'), padBadge: g('pad-badge'),
+      rpmFill: g('rpm-fill')
+    };
+    this._toastTimer = 0;
+    this._lastBig = '';
+  }
+
+  setHoverPoint(pct) {
+    if (this.el.throttleHover) this.el.throttleHover.style.bottom = `calc(${(pct * 100).toFixed(1)}% - 1px)`;
+  }
+
+  update(t, extra = {}) {
+    const e = this.el;
+    e.spd.textContent = (t.speed * 3.6).toFixed(1);
+    e.alt.textContent = t.altitude.toFixed(1);
+    e.vspeed.textContent = (t.vspeed >= 0 ? '+' : '') + t.vspeed.toFixed(1);
+    const hdg = Math.round(t.heading) % 360;
+    e.hdg.textContent = String((hdg + 360) % 360).padStart(3, '0');
+    e.hdgCard.textContent = CARDINALS[Math.round(((hdg + 360) % 360) / 45) % 8];
+
+    const thr = Math.max(0, Math.min(1, t.throttle / 100));
+    e.throttleFill.style.height = (thr * 100).toFixed(0) + '%';
+    e.throttlePct.textContent = Math.round(thr * 100) + '%';
+    if (e.rpmFill) e.rpmFill.style.height = Math.min(100, t.rpm * 88).toFixed(0) + '%';
+
+    const pxPerDeg = 1.3;
+    const pitch = Math.max(-90, Math.min(90, t.pitchDeg));
+    const roll = Math.max(-90, Math.min(90, t.rollDeg));
+    e.aiHorizon.style.transform = `translateY(${(pitch * pxPerDeg).toFixed(1)}px) rotate(${(-roll).toFixed(1)}deg)`;
+    e.pitchOut.textContent = pitch.toFixed(0);
+    e.rollOut.textContent = roll.toFixed(0);
+
+    const batt = Math.max(0, Math.min(100, t.battery));
+    e.batteryFill.style.width = batt.toFixed(0) + '%';
+    e.batteryPct.textContent = Math.round(batt) + '%';
+    e.batteryFill.style.background = batt < 20 ? 'var(--bad)' : batt < 45 ? 'var(--warn)' : 'var(--good)';
+    const cells = 4;
+    e.batteryVol.textContent = (batt / 100 * 0.85 + 3.3) * cells > 0 ? ((batt / 100 * 0.85 + 3.3) * cells).toFixed(1) + 'V' : '';
+
+    if (t.fps) e.fps.textContent = Math.round(t.fps) + ' FPS';
+
+    const mode = t.mode || 'STABLE';
+    e.flightMode.textContent = mode;
+    const dotColor = mode === 'DISARMED' || mode === 'CRASHED' ? 'var(--bad)' : mode === 'ACRO' ? 'var(--accent-2)' : 'var(--good)';
+    e.modeDot.style.background = dotColor;
+    e.modeDot.style.boxShadow = `0 0 8px ${dotColor}`;
+
+    // arm badge + combo progress
+    if (extra.armProg > 0 || extra.disarmProg > 0) {
+      e.armBar.parentElement.classList.add('show');
+      const p = extra.armProg > 0 ? extra.armProg : extra.disarmProg;
+      e.armBar.style.width = (p * 100).toFixed(0) + '%';
+      e.armBar.style.background = extra.armProg > 0 ? 'var(--good)' : 'var(--bad)';
+    } else {
+      e.armBar.parentElement.classList.remove('show');
+    }
+    e.armBadge.textContent = t.armed ? 'ARMED' : 'DISARMED';
+    e.armBadge.classList.toggle('armed', !!t.armed);
+    e.armBadge.classList.toggle('crashed', !!t.crashed);
+
+    // mission info
+    if (extra.objective !== undefined) e.objText.textContent = extra.objective || '';
+    if (extra.progressFrac !== undefined) e.progFill.style.width = (Math.max(0, Math.min(1, extra.progressFrac)) * 100).toFixed(1) + '%';
+    const big = extra.big;
+    const key = big ? big.value + '|' + big.label + '|' + (big.sub || '') : '';
+    if (key !== this._lastBig) {
+      this._lastBig = key;
+      if (big) {
+        e.bigVal.textContent = big.value;
+        e.bigLabel.textContent = big.label;
+        e.bigSub.textContent = big.sub || '';
+        e.bigVal.parentElement.style.display = '';
+      } else e.bigVal.parentElement.style.display = 'none';
+    }
+  }
+
+  setView(name) { this.el.viewBadge.textContent = name; }
+  setMission(name) { this.el.missionBadge.textContent = name; this.el.missionBadge.style.display = name ? '' : 'none'; }
+
+  setPad(on) {
+    this.el.padBadge.style.display = on ? '' : 'none';
+    if (on) this.toast('GAMEPAD CONNECTED', 1400);
+  }
+
+  flashGate() {
+    const f = this.el.flash;
+    f.classList.remove('on');
+    void f.offsetWidth;
+    f.classList.add('on');
+  }
+
+  toast(msg, ms = 1400) {
+    const el = this.el.toast;
+    el.textContent = msg;
+    el.classList.add('on');
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => el.classList.remove('on'), ms);
+  }
+
+  showHelp(v) { this.el.help.classList.toggle('hide', !v); }
+}

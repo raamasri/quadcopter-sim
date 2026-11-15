@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>QUADSIM PRO — Quadcopter Flight Simulator</title>
+  <link rel="stylesheet" href="/src/ui/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9A%81%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div id="hud" aria-hidden="false">
+    <div class="hud-topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div class="brand-text">
+          <span class="brand-title">QUADSIM</span>
+          <span class="brand-sub">flight dynamics</span>
+        </div>
+      </div>
+      <div class="top-right">
+        <div id="mission-badge" class="chip mission" style="display:none">FREE FLIGHT</div>
+        <div id="pad-badge" class="chip pad" style="display:none">PAD</div>
+        <div id="view-badge" class="chip">CHASE</div>
+        <div id="fps" class="chip">— FPS</div>
+      </div>
+    </div>
+
+    <div class="reticle"><div class="reticle-dot"></div><div class="reticle-ring"></div></div>
+
+    <div class="panel telemetry left">
+      <div class="tele-row"><span class="tele-label">SPD</span><span class="tele-value"><span id="spd">0.0</span><span class="tele-unit">km/h</span></span></div>
+      <div class="tele-row"><span class="tele-label">ALT</span><span class="tele-value"><span id="alt">0.0</span><span class="tele-unit">m</span></span></div>
+      <div class="tele-row"><span class="tele-label">V/S</span><span class="tele-value"><span id="vspeed">0.0</span><span class="tele-unit">m/s</span></span></div>
+      <div class="tele-row"><span class="tele-label">HDG</span><span class="tele-value"><span id="hdg">000</span>°<span id="hdg-card" class="cardinal">N</span></span></div>
+    </div>
+
+    <div class="throttle">
+      <div class="throttle-track">
+        <div id="rpm-fill" class="rpm-fill"></div>
+        <div id="throttle-fill" class="throttle-fill"></div>
+        <div id="throttle-hover" class="throttle-hover" title="hover point"></div>
+      </div>
+      <div class="throttle-cap"><span id="throttle-pct">0%</span>THR</div>
+    </div>
+
+    <div class="ai-wrap">
+      <div class="ai">
+        <div id="ai-horizon" class="ai-horizon"></div>
+        <div class="ai-marks"></div>
+        <div class="ai-aircraft"></div>
+      </div>
+      <div class="ai-readout">
+        <span><span id="pitch-out">0</span>° pitch</span>
+        <span class="mode-pill"><span id="mode-dot"></span><span id="flight-mode">STABLE</span></span>
+        <span><span id="roll-out">0</span>° roll</span>
+      </div>
+      <div class="arm-line">
+        <span id="arm-badge" class="arm-badge">DISARMED</span>
+        <span class="arm-bar-wrap"><i id="arm-bar" class="arm-bar"></i></span>
+        <span class="arm-hint">THR↓ + yaw</span>
+      </div>
+    </div>
+
+    <div class="panel objective right">
+      <div id="obj-text" class="obj-text">Ready</div>
+      <div class="prog-track"><div id="prog-fill" class="prog-fill"></div></div>
+    </div>
+
+    <div class="panel bigstat right">
+      <div class="big-top"><span id="big-val">0</span></div>
+      <div id="big-label" class="big-label">GATES</div>
+      <div id="big-sub" class="big-sub"></div>
+    </div>
+
+    <div class="panel battery right">
+      <div class="battery-row">
+        <div class="battery-track"><div id="battery-fill" class="battery-fill"></div></div>
+        <span id="battery-pct" class="battery-pct">100%</span>
+      </div>
+      <div class="battery-vol-line"><span id="battery-vol">16.8V</span> · 4S LIPO</div>
+    </div>
+
+    <div id="flash" class="flash"></div>
+    <div id="toast" class="toast"></div>
+
+    <div id="help" class="help">
+      <div class="help-card">
+        <h1>QUADSIM PRO</h1>
+        <div class="help-grid">
+          <div class="help-col">
+            <h3>Flight</h3>
+            <ul>
+              <li><kbd>Thr ↓ + E</kbd> arm (hold)</li>
+              <li><kbd>Thr ↓ + Q</kbd> disarm (hold)</li>
+              <li><kbd>W</kbd><kbd>S</kbd> pitch fwd / back</li>
+              <li><kbd>A</kbd><kbd>D</kbd> roll left / right</li>
+              <li><kbd>Q</kbd><kbd>E</kbd> yaw left / right</li>
+              <li><kbd>Space</kbd> throttle up · <kbd>Shift</kbd> down</li>
+              <li><kbd>T</kbd> angle ↔ acro mode</li>
+            </ul>
+          </div>
+          <div class="help-col">
+            <h3>Views &amp; System</h3>
+            <ul>
+              <li><kbd>C</kbd> cycle camera · <kbd>1</kbd>–<kbd>6</kbd> jump</li>
+              <li><kbd>M</kbd> mouse look</li>
+              <li><kbd>R</kbd> respawn · <kbd>P</kbd> pause</li>
+              <li><kbd>L</kbd> day / night · <kbd>F</kbd> fullscreen</li>
+              <li><kbd>G</kbd> quick arm · <kbd>H</kbd> this help</li>
+              <li>Gamepad: LS thr/yaw · RS pitch/roll</li>
+              <li>Gamepad: <kbd>A</kbd> arm · <kbd>X</kbd> mode · <kbd>Start</kbd> pause</li>
+            </ul>
+          </div>
+        </div>
+        <p class="help-hint">Press <kbd>H</kbd> or any flight key to dismiss</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="screens"></div>
+
+  <div id="boot-error" class="boot-error" hidden>
+    <h2>Render error</h2>
+    <pre id="boot-error-msg"></pre>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
